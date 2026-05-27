@@ -5701,8 +5701,31 @@ function nextQuestion() {
   stopCurrentAudio();
   if (window.speechSynthesis) window.speechSynthesis.cancel();
   state.qIndex++;
+  // ★ احفظ مكان الوقوف وأنت بتلعب (عشان لو طلعت تكمّل من هنا)
+  if (state.isReviewMode && state.reviewSurah) {
+    _saveReviewPos(state.reviewSurah, state.qIndex, state.questions.length);
+  }
   if (state.qIndex >= state.questions.length) showResults();
   else renderQuestion();
+}
+
+function _saveReviewPos(surahName, pos, total) {
+  if (!currentUser || currentUser.isGuest) return;
+  const key = 'nour_revprog_' + currentUser.username;
+  let d = {};
+  try { d = JSON.parse(localStorage.getItem(key) || '{}'); } catch {}
+  const prev = d[surahName] || { done:0, total:0, streak:0 };
+  d[surahName] = {
+    ...prev,
+    pos: pos,
+    total: total || prev.total || 0,
+    // الشريط الأخضر يوريك تقدّمك وأنت بتلعب
+    done: Math.max(prev.done || 0, pos),
+    inProgress: true,
+    lastPlay: Date.now()
+  };
+  localStorage.setItem(key, JSON.stringify(d));
+  if (typeof window.fbSaveRevProg === 'function') window.fbSaveRevProg(currentUser.username, d);
 }
 
 function showResults() {
@@ -6296,6 +6319,7 @@ function markSurahReviewStarted(surahName, total) {
   d[surahName] = {
     ...prev,
     done: wasComplete ? 0 : (prev.done || 0),
+    pos: wasComplete ? 0 : (prev.pos || 0),
     total,
     inProgress: true,
     lastPlay: Date.now()
@@ -6317,7 +6341,7 @@ function saveSurahReviewProgress(surahName, done, total) {
   const perfect = accuracy >= 1.0;
   const finished = total > 0;
   const streak = perfect ? (prev.streak||0)+1 : prev.streak||0;
-  d[surahName] = { done, total, streak, lastPlay: Date.now(), inProgress: !finished };
+  d[surahName] = { done, total, streak, pos: 0, lastPlay: Date.now(), inProgress: !finished };
   localStorage.setItem(key, JSON.stringify(d));
   // ★ sync على Firebase
   if (typeof window.fbSaveRevProg === 'function') {
@@ -6728,13 +6752,22 @@ function startSurahReview(surahName) {
   state.reviewTotal = questions.length;
   state.isReviewMode = true;
   state.questions = questions;
-  state.qIndex = 0; state.score = 0; state.correct = 0;
+  // ★ كمّل من مكان الوقوف لو السورة مش مكتملة؛ المكتملة تبدأ من الأول
+  const _prog = getSurahReviewProgress(_targetSurah);
+  const _wasComplete = (_prog.total > 0) && ((_prog.done || 0) >= _prog.total);
+  let _resumeIdx = 0;
+  if (!_wasComplete && _prog.inProgress === true &&
+      typeof _prog.pos === 'number' && _prog.pos > 0 && _prog.pos < questions.length) {
+    _resumeIdx = _prog.pos;
+  }
+  state.qIndex = _resumeIdx; state.score = 0; state.correct = 0;
   state.sessionHasanat = 0; state.answered = false;
   state.combo = 0;
   state.hints = { h1:1, h2:1, h3:1 };
   state.mode = 'mcq';
   stopTimer();
   markSurahReviewStarted(_targetSurah, questions.length);
+  if (_resumeIdx > 0 && typeof showToast === 'function') showToast('▶️ كمّلنا من حيث وقفت');
   renderQuestion();
 }
 
