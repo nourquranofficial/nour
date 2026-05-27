@@ -3573,6 +3573,35 @@ function updateQcountSliderMax() {
   hint.textContent = '';
 }
 
+// يبني سطر صغير خافت بأسامي سور الجزء (تسهيل لمعرفة محتوى الجزء)
+function _juzSurahLine(juzNum) {
+  const segs = JUZ_SURAHS[parseInt(juzNum)] || [];
+  const names = [...new Set(segs.map(s => (SURAHS_FULL[s.s-1] && SURAHS_FULL[s.s-1][0]) || '').filter(Boolean))];
+  if (!names.length) return '';
+  const total = names.length;
+  // لو السور قليلة نعرضها كلها، لو كتير (زي جزء عمّ) نعرض أول 4 + الأخيرة + العدد عشان مايطولش ويبقى وحش
+  const shown = (total <= 7)
+    ? names.join('، ')
+    : (names.slice(0,4).join('، ') + ' … ' + names[total-1] + ' (' + toArabicNum(total) + ' سورة)');
+  return '<br><span style="color:rgba(245,217,139,0.5);font-size:11px;line-height:1.7;">📖 تشمل: ' + shown + '</span>';
+}
+
+// يحوّل موضع على سلايدر الجزء (1..عدد آيات الجزء) لـ «سورة + رقم آية» الحقيقي
+function _juzPosRef(juzNum, pos) {
+  const segs = JUZ_SURAHS[parseInt(juzNum)] || [];
+  let acc = 0;
+  for (const seg of segs) {
+    const len = seg.e - seg.a + 1;
+    if (pos <= acc + len) {
+      const sName = (SURAHS_FULL[seg.s - 1] && SURAHS_FULL[seg.s - 1][0]) || '';
+      return { surah: sName, ayah: seg.a + (pos - acc - 1) };
+    }
+    acc += len;
+  }
+  const last = segs[segs.length - 1] || { s: 1, e: 1 };
+  return { surah: (SURAHS_FULL[last.s - 1] || [])[0] || '', ayah: last.e };
+}
+
 function setAllSurahQuestions() {
   if (!selectedSurah) return;
   const meta = SURAHS_FULL.find(s => s[0] === selectedSurah);
@@ -4353,7 +4382,7 @@ function selectJuzFromDropdown(item) {
   // نفس منطق onJuzFilterChange
   const segs = JUZ_SURAHS[item.num];
   const totalAyahs = item.totalAyahs;
-  safeHTML('surahHint', '✅ الجزء ' + toArabicNum(item.num) + ' — <span style="color:var(--gold)">' + toArabicNum(totalAyahs) + ' آية</span> — محلي ⚡ بدون إنترنت');
+  safeHTML('surahHint', '✅ الجزء ' + toArabicNum(item.num) + ' — <span style="color:var(--gold)">' + toArabicNum(totalAyahs) + ' آية</span> — محلي ⚡ بدون إنترنت' + _juzSurahLine(item.num));
   document.getElementById('surahHint').style.color = 'var(--emerald-light)';
   selectedQCount = totalAyahs;
   document.getElementById('qcountDisplay').textContent = toArabicNum(selectedQCount);
@@ -4375,7 +4404,7 @@ function onJuzFilterChange() {
   }
   const segs = JUZ_SURAHS[parseInt(selectedJuz)];
   const totalAyahs = segs.reduce((sum,seg)=>sum+(seg.e-seg.a+1), 0);
-  safeHTML('surahHint', '✅ الجزء ' + toArabicNum(selectedJuz) + ' — <span style="color:var(--gold)">' + toArabicNum(totalAyahs) + ' آية</span> — محلي ⚡ بدون إنترنت');
+  safeHTML('surahHint', '✅ الجزء ' + toArabicNum(selectedJuz) + ' — <span style="color:var(--gold)">' + toArabicNum(totalAyahs) + ' آية</span> — محلي ⚡ بدون إنترنت' + _juzSurahLine(selectedJuz));
   document.getElementById('surahHint').style.color = 'var(--emerald-light)';
   selectedQCount = totalAyahs;
   document.getElementById('qcountDisplay').textContent = toArabicNum(selectedQCount);
@@ -4623,9 +4652,20 @@ function _dsUpdate() {
   if (_dsFrom === _dsMin && _dsTo === _dsMax) {
     summary.textContent = selectedSurah
       ? ('📖 كل السورة — ' + toArabicNum(_dsMax) + ' ' + ayatWord(_dsMax))
-      : isRandom
-        ? ('🎲 كل النطاق — ' + toArabicNum(_dsMax) + ' سؤال عشوائي')
-        : ('📖 كل النطاق — ' + toArabicNum(_dsMax) + ' سؤال');
+      : selectedJuz
+        ? ('📖 كل الجزء — ' + toArabicNum(_dsMax) + ' سؤال')
+        : isRandom
+          ? ('🎲 كل النطاق — ' + toArabicNum(_dsMax) + ' سؤال عشوائي')
+          : ('📖 كل النطاق — ' + toArabicNum(_dsMax) + ' سؤال');
+  } else if (selectedJuz) {
+    // ★ في الجزء: نعرض السورة + رقم الآية الحقيقي لبداية ونهاية النطاق
+    const _rf = _juzPosRef(selectedJuz, _dsFrom);
+    const _rt = _juzPosRef(selectedJuz, _dsTo);
+    const _fromTxt = _rf.surah + ' آية ' + toArabicNum(_rf.ayah);
+    const _toTxt   = _rt.surah + ' آية ' + toArabicNum(_rt.ayah);
+    summary.textContent = (_fromTxt === _toTxt)
+      ? ('📍 ' + _fromTxt + ' — سؤال واحد')
+      : ('من ' + _fromTxt + ' ← إلى ' + _toTxt + ' — ' + toArabicNum(selectedQCount) + ' سؤال');
   } else {
     summary.textContent = selectedSurah
       ? ('من آية ' + toArabicNum(_dsFrom) + ' إلى آية ' + toArabicNum(_dsTo) + ' ـ ' + toArabicNum(selectedQCount) + ' ' + ayatWord(selectedQCount))
@@ -5180,7 +5220,10 @@ function startGame() {
   else if (selectedJuz) {
     qs = loadJuzQuestions(parseInt(selectedJuz));
     if (!qs) { showToast('⚠️ تعذّر تحميل الجزء من القاعدة المحلية'); return; }
-    if (selectedQCount < qs.length) qs = qs.slice(0, selectedQCount);
+    // ★ قصّ حسب النطاق المختار فعلاً (من آية لآية داخل الجزء) — مش من أول الجزء دايمًا
+    const _jf = Math.max(1, selectedFromAyah || 1);
+    const _jt = Math.min(qs.length, selectedToAyah || qs.length);
+    if (_jf > 1 || _jt < qs.length) qs = qs.slice(_jf - 1, _jt);
   }
   // ===== سورة محددة =====
   else if (selectedSurah) {
@@ -7864,6 +7907,35 @@ function _renderMultiQuestion() {
   }, 1000);
 }
 
+// ★★ بنك النقاط الفوري للّعب الجماعي ★★
+// كل إجابة صح بترفع نقاطها فورًا لحساب اللاعب (atomic للمسجّل، LWW للضيف).
+// كده نقاط أي لاعب مضمونة 100% حتى لو قفل التطبيق أو اتقطع النت قبل شاشة النتايج،
+// ومستحيل نقطة تضيع لأي لاعب مهما كان عددهم في الغرفة.
+function _bankMultiPoints(earned) {
+  if (!earned || earned <= 0) return;
+  const _cu = currentUser || window.currentUser;
+  if (!_cu) return;
+  if (!_cu.isGuest) {
+    // مسجّل: زيادة atomic على السحابة (fbIncrementScore بتحدّث الرصيد المحلي + اللوحة في .then)
+    if (typeof window.fbIncrementScore === 'function') {
+      window.fbIncrementScore(_cu.username, earned, earned, 0);
+    } else {
+      _cu.totalHasanat = (_cu.totalHasanat || 0) + earned;
+      _cu.totalScore   = (_cu.totalScore   || 0) + earned;
+      saveCurrentUser();
+    }
+  } else {
+    // ضيف: تحديث محلي + رفع للوحة بالقيمة المطلقة
+    _cu.totalHasanat = (_cu.totalHasanat || 0) + earned;
+    _cu.totalScore   = (_cu.totalScore   || 0) + earned;
+    currentUser = _cu; window.currentUser = _cu;
+    if (typeof window.fbSaveUser === 'function') {
+      window.fbSaveUser(_cu.username, { totalHasanat:_cu.totalHasanat, totalScore:_cu.totalScore, totalGames:_cu.totalGames||0, isGuest:true });
+    }
+  }
+  if (typeof updateHomeStats === 'function') updateHomeStats();
+}
+
 function _multiAnswer(chosen, correct, q, clickedBtn, e) {
   const wrap = document.getElementById('multiChoicesWrap');
   if (!wrap) return;
@@ -7883,6 +7955,7 @@ function _multiAnswer(chosen, correct, q, clickedBtn, e) {
     const speedBonus = Math.round(timeLeft * 1.0); // كل ثانية = نقطة إضافية
     const earned = 10 + speedBonus;
     multiState.myScore += earned;
+    _bankMultiPoints(earned); // ★ بنك فوري: النقطة تترفع لحظة كسبها — مضمونة حتى لو اتقطع قبل النتايج
     const bonusEl = document.getElementById('multiSpeedBonus');
     if (bonusEl) {
       if (speedBonus > 0) {
@@ -8014,35 +8087,28 @@ function _showMultiResults() {
     }
   }
 
-  // ===== إضافة نقاط اللعب الجماعي على رصيد اللاعب (مسجل وضيف) =====
-  // ★ guard: _showMultiResults ممكن تتنادى أكتر من مرة (نهاية اللعبة + polling)،
-  //   فلازم النقاط تتحسب مرة واحدة بس في الجولة دي عشان ما تتضاعفش.
+  // ===== عدّ اللعبة (النقاط نفسها اتحفظت فورًا مع كل إجابة عبر _bankMultiPoints) =====
+  // ★ guard: _showMultiResults ممكن تتنادى أكتر من مرة، فالعدّ مرة واحدة بس.
+  //   النقاط مش بتتجمع هنا تاني عشان ماتتضاعفش — اتحفظت بالفعل لحظة كل إجابة صح.
   const _cu = currentUser || window.currentUser;
-  if (_cu && multiState.myScore > 0 && !multiState._scoreSavedThisRound) {
+  if (_cu && !multiState._scoreSavedThisRound) {
     multiState._scoreSavedThisRound = true;
-    _cu.totalHasanat = (_cu.totalHasanat || 0) + multiState.myScore;
-    _cu.totalScore   = (_cu.totalScore   || 0) + multiState.myScore;
-    _cu.totalGames   = (_cu.totalGames   || 0) + 1;
-    _cu.lastPlay     = Date.now();
+    _cu.totalGames = (_cu.totalGames || 0) + 1;
+    _cu.lastPlay   = Date.now();
     currentUser = _cu;
     window.currentUser = _cu;
     if (!_cu.isGuest) {
       saveCurrentUser();
-      // المسجّل: زيادة atomic — fbIncrementScore بترفع اللوحة بالقيمة الصحيحة بعد الـtransaction،
-      // فمفيش كتابة مطلقة قديمة تطغى عليها وتضيّع نقاطه.
       if (typeof window.fbIncrementScore === 'function') {
-        window.fbIncrementScore(_cu.username, multiState.myScore, multiState.myScore, 1);
+        window.fbIncrementScore(_cu.username, 0, 0, 1); // عدّ اللعبة فقط — النقاط اتحفظت قبل كده
       }
-    } else {
-      // الضيف: مفيش transaction، فنرفع نقاطه للوحة مباشرة
-      if (typeof window.fbSaveUser === 'function') {
-        window.fbSaveUser(_cu.username, {
-          totalHasanat: _cu.totalHasanat,
-          totalScore:   _cu.totalScore,
-          totalGames:   _cu.totalGames,
-          isGuest:      true,
-        });
-      }
+    } else if (typeof window.fbSaveUser === 'function') {
+      window.fbSaveUser(_cu.username, {
+        totalHasanat: _cu.totalHasanat,
+        totalScore:   _cu.totalScore,
+        totalGames:   _cu.totalGames,
+        isGuest:      true,
+      });
     }
     updateHomeStats();
   }
@@ -8168,35 +8234,9 @@ function multiLeaveRoom() {
   clearInterval(multiState.questionTimer);
   _stopPolling();
 
-  // لو اللاعب خرج وهو في منتصف اللعب — نحفظ نقاطه بدون إحصاء جلسة كاملة
-  // ★ نستخدم نفس الـ guard بتاع النتايج عشان النقاط ما تتحسبش مرتين أبداً
-  if (multiState.phase === 'playing' && multiState.myScore > 0 && !multiState._scoreSavedThisRound) {
-    multiState._scoreSavedThisRound = true;
-    const _cu = currentUser || window.currentUser;
-    if (_cu) {
-      _cu.totalHasanat = (_cu.totalHasanat || 0) + multiState.myScore;
-      _cu.totalScore   = (_cu.totalScore   || 0) + multiState.myScore;
-      // totalGames لا تُزاد — لأن اللعبة لم تكتمل
-      currentUser = _cu;
-      window.currentUser = _cu;
-      if (!_cu.isGuest) {
-        saveCurrentUser();
-        // المسجّل: زيادة atomic بترفع اللوحة بالقيمة الصحيحة (مفيش كتابة مطلقة قديمة تطغى عليها)
-        if (typeof window.fbIncrementScore === 'function') {
-          window.fbIncrementScore(_cu.username, multiState.myScore, multiState.myScore, 0);
-        }
-      } else if (typeof window.fbSaveUser === 'function' && (_cu.totalScore || 0) > 0) {
-        // الضيف فقط: رفع مباشر للوحة
-        window.fbSaveUser(_cu.username, {
-          totalHasanat: _cu.totalHasanat,
-          totalScore:   _cu.totalScore,
-          totalGames:   _cu.totalGames,
-          isGuest:      true,
-        });
-      }
-      updateHomeStats();
-    }
-  }
+  // ملاحظة: نقاط اللعب الجماعي بتتحفظ فورًا مع كل إجابة صح (_bankMultiPoints)،
+  // فمفيش داعي نحفظها تاني هنا — كده مستحيل تتكرر ومستحيل تضيع لو خرج في النص.
+  multiState._scoreSavedThisRound = true;
   if (typeof window.fbMulti !== 'undefined' && code) {
     window.fbMulti.removePlayer(code, pk);
     // لو الـ host خرج يحدّث phase لـ closed أولاً عشان اللاعبين يعرفوا، ثم يمسح الغرفة
@@ -8287,6 +8327,7 @@ function _startPolling() {
           multiState.phase = 'playing';
           multiState.myScore = 0;
           multiState.qIndex = 0;
+          multiState._scoreSavedThisRound = false; // ★ مهم: عشان نقاط اللاعب (غير المضيف) تتحسب في الجولة دي
           // نتأكد إن الأسئلة اتوسّعت وتعدّت لـ multiState
           multiState.questions = room.questions; // room.questions اتوسّعت فوق
           multiState.totalQ = room.totalQ || room.questions.length;
