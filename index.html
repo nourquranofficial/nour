@@ -2565,7 +2565,7 @@ function _callWhenReady(fn, args) {
         <div id="multiFinalScores" style="background:rgba(255,254,249,0.03);border:1px solid rgba(201,151,58,0.15);border-radius:16px;padding:16px;margin-bottom:20px;"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <button onclick="multiPlayAgain()" style="padding:14px;background:linear-gradient(135deg,var(--gold),#E8B84B);border:none;border-radius:14px;font-family:'Cairo',sans-serif;font-size:15px;font-weight:700;color:var(--ink);cursor:pointer;">🔄 مرة تانية</button>
-          <button onclick="multiLeaveRoom()" style="padding:14px;background:rgba(255,254,249,0.05);border:1px solid rgba(201,151,58,0.25);border-radius:14px;font-family:'Cairo',sans-serif;font-size:15px;font-weight:700;color:var(--gold-light);cursor:pointer;">🏠 الرئيسية</button>
+          <button onclick="multiLeaveRoom(); goHome();" style="padding:14px;background:rgba(255,254,249,0.05);border:1px solid rgba(201,151,58,0.25);border-radius:14px;font-family:'Cairo',sans-serif;font-size:15px;font-weight:700;color:var(--gold-light);cursor:pointer;">🏠 الرئيسية</button>
         </div>
       </div>
     </div>
@@ -8117,7 +8117,17 @@ function _showMultiResults() {
   document.getElementById('multiResults').style.display = 'block';
 
   const finalRoom = window._multiRoomCache;
-  const players = finalRoom ? (finalRoom.players || {}) : {};
+  const players = finalRoom ? { ...(finalRoom.players || {}) } : {};
+  // ★ نقطة اللاعب نفسه تتاخد من المصدر المحلي الموثوق (multiState.myScore) —
+  //   عشان متظهرش صفر لو كتابة الغرفة على Firebase اتأخّرت أو ما رجعتش لجهازه.
+  if (pk) {
+    const _prev = players[pk] || {};
+    players[pk] = {
+      ..._prev,
+      name:  _prev.name || multiState.playerName || (currentUser && currentUser.username) || 'أنت',
+      score: Math.max(_prev.score || 0, multiState.myScore || 0),
+    };
+  }
   const sorted = Object.entries(players).filter(([, p]) => p != null).sort((a,b) => (b[1].score||0) - (a[1].score||0));
   const medals = ['🥇','🥈','🥉','🎖️'];
 
