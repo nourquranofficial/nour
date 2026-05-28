@@ -8363,6 +8363,17 @@ function _showMultiResults() {
     </div>`
   ).join('');
 
+  // ★ سطر تشخيص مؤقت (هنشيله بعد ما نلاقي المشكلة) — يوضّح القيم الحقيقية على جهاز اللاعب
+  try {
+    const _diag = document.createElement('div');
+    _diag.id = '_multiDiag';
+    const _cacheScore = (window._multiRoomCache && window._multiRoomCache.players && window._multiRoomCache.players[pk]) ? window._multiRoomCache.players[pk].score : 'مفيش';
+    _diag.style.cssText = 'margin-top:10px;padding:8px;background:rgba(0,0,0,0.4);border:1px dashed rgba(245,217,139,0.4);border-radius:8px;font-size:10px;color:#9fe;direction:ltr;text-align:left;font-family:monospace;line-height:1.6;';
+    _diag.innerHTML = 'DIAG v9 | myScore=' + (multiState.myScore) + ' | pk=' + String(pk).slice(0,18) + ' | cacheScore=' + _cacheScore + ' | players=' + Object.keys((window._multiRoomCache&&window._multiRoomCache.players)||{}).length;
+    const sc = document.getElementById('multiFinalScores');
+    if (sc && sc.parentNode) sc.parentNode.insertBefore(_diag, sc.nextSibling);
+  } catch(e) {}
+
   // ★ بعد ثانية، نجيب أحدث بيانات من Firebase ونعيد العرض عشان كل اللاعيبة يشوفوا نفس النتيجة
   //    (ده بيحل مشكلة التضارب لو كتابة لاعب على Firebase وصلت متأخرة)
   if (typeof window.fbMulti !== 'undefined' && multiState.roomCode) {
@@ -8418,6 +8429,15 @@ function _showMultiResults() {
               <span style="font-size:18px;font-weight:900;color:var(--emerald-light);">${toArabicNum(_recordMax(u, _bestScore(p)))}</span>
             </div>`
           ).join('');
+          // ★ تحديث سطر التشخيص بنتيجة القراءة من Firebase
+          try {
+            const _diag = document.getElementById('_multiDiag');
+            if (_diag) {
+              const _fsVal = (finalScores && finalScores[pk]) ? finalScores[pk].score : 'مفيش';
+              const _fpVal = (freshRoom && freshRoom.players && freshRoom.players[pk]) ? freshRoom.players[pk].score : 'مفيش';
+              _diag.innerHTML = 'DIAG v9 refresh' + attempt + ' | myScore=' + (multiState.myScore) + ' | finalScores[pk]=' + _fsVal + ' | players[pk]=' + _fpVal + ' | pk=' + String(pk).slice(0,18);
+            }
+          } catch(e) {}
         });
       });
     };
