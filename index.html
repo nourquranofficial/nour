@@ -1771,8 +1771,9 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
         // الغرفة بتفضل عشان اللاعبين يشوفوا إنها قفلت، وبيتم مسحها لاحقاً عبر cleanOldRooms
         onDisconnect(ref(db, ROOMS_PATH + roomCode + '/phase')).set('closed');
       } else {
-        // لاعب عادي — يتشال من الغرفة لو انقطع
-        onDisconnect(ref(db, ROOMS_PATH + roomCode + '/players/' + playerKey)).remove();
+        // ★ لاعب عادي: مانمحيهوش لو انقطع — بس نحطّ علم disconnected
+        // (الإزالة الكاملة كانت بتمسح نقاطه لو حصل قطع شبكة لحظي على الموبايل)
+        onDisconnect(ref(db, ROOMS_PATH + roomCode + '/players/' + playerKey + '/disconnected')).set(true);
       }
     },
 
@@ -2239,20 +2240,9 @@ function _callWhenReady(fn, args) {
         <input type="password" id="regPass2" name="confirm-password" autocomplete="new-password" placeholder="أعد كتابة كلمة المرور...">
       </div>
       <div class="login-field">
-        <label>سؤال الأمان (لو نسيت كلمة المرور)</label>
-        <span class="login-field-icon">🛡️</span>
-        <select id="regSecQ" style="width:100%;padding:14px 38px 14px 14px;background:rgba(255,254,249,0.04);border:1px solid rgba(201,151,58,0.3);border-radius:12px;color:var(--cream);font-family:'Cairo',sans-serif;font-size:14px;direction:rtl;box-sizing:border-box;">
-          <option value="mother">ما اسم والدتك؟</option>
-          <option value="school">ما اسم أول مدرسة درست فيها؟</option>
-          <option value="city">ما اسم المدينة اللي اتولدت فيها؟</option>
-          <option value="color">ما لونك المفضّل؟</option>
-          <option value="pet">ما اسم حيوان أليف ربيته؟</option>
-        </select>
-      </div>
-      <div class="login-field">
-        <label>إجابة سؤال الأمان</label>
-        <span class="login-field-icon">💡</span>
-        <input type="text" id="regSecA" placeholder="اكتب إجابتك (افتكرها كويس!)">
+        <label>ما لونك المفضّل؟ (لاسترجاع الحساب)</label>
+        <span class="login-field-icon">🎨</span>
+        <input type="text" id="regSecA" placeholder="مثلاً: أزرق، أحمر، أخضر... (افتكره كويس!)">
       </div>
       <button type="submit" class="login-btn">إنشاء الحساب 🌟</button>
     </form>
@@ -3099,7 +3089,6 @@ function doRegister() {
   const user = document.getElementById('regUser').value.trim();
   const pass = document.getElementById('regPass').value;
   const pass2 = document.getElementById('regPass2').value;
-  const secQ = document.getElementById('regSecQ').value;
   const secA = document.getElementById('regSecA').value.trim();
   if (!name || !user || !pass) { showLoginErr('أدخل جميع البيانات (الاسم، اسم المستخدم، كلمة المرور)'); return; }
   if (name.length < 2) { showLoginErr('الاسم يجب أن يكون حرفين على الأقل'); return; }
@@ -3111,7 +3100,7 @@ function doRegister() {
   }
   if (pass.length < 4) { showLoginErr('كلمة المرور يجب أن تكون ٤ أحرف على الأقل'); return; }
   if (pass !== pass2) { showLoginErr('كلمتا المرور غير متطابقتين'); return; }
-  if (!secA || secA.length < 2) { showLoginErr('اكتب إجابة سؤال الأمان (حرفين على الأقل) — هتحتاجها لو نسيت كلمة المرور'); return; }
+  if (!secA || secA.length < 2) { showLoginErr('اكتب لونك المفضّل (حرفين على الأقل) — هتحتاجه لو نسيت كلمة المرور'); return; }
 
   // ★ مهم: نمسح أي session قديمة عشان loginSuccess ما تتعطّلش
   currentUser = null;
@@ -3123,8 +3112,8 @@ function doRegister() {
   const _onReg = () => {
     const defaultData = createDefaultUserData();
     defaultData.name = name; // ★ الاسم للعرض (يظهر للناس بدل username)
-    // ★ سؤال الأمان + الإجابة (الإجابة طبيعتها lowercase+trim للمقارنة، ومخزّنة مشفّرة)
-    defaultData.secQ = secQ;
+    // ★ سؤال الأمان واحد ثابت: اللون المفضّل (الإجابة مخزّنة مشفّرة + lowercase للمقارنة)
+    defaultData.secQ = 'color';
     defaultData.secA = btoa(unescape(encodeURIComponent(secA.toLowerCase())));
     // ★ لو فيه نقاط محلية للاسم ده (من قبل التوحيد) — احتفظ بيها بدل ما نبدأ من صفر
     try {
@@ -3252,14 +3241,7 @@ function editDisplayName() {
 }
 window.editDisplayName = editDisplayName;
 
-// ★ استرجاع الحساب — سؤال الأمان (فوري، من غير ما يستنّى حد)
-const _SEC_QUESTIONS = {
-  mother: 'ما اسم والدتك؟',
-  school: 'ما اسم أول مدرسة درست فيها؟',
-  city:   'ما اسم المدينة اللي اتولدت فيها؟',
-  color:  'ما لونك المفضّل؟',
-  pet:    'ما اسم حيوان أليف ربيته؟',
-};
+// ★ استرجاع الحساب — سؤال الأمان واحد ثابت: اللون المفضّل (فوري، من غير ما يستنّى حد)
 
 function startRecovery() {
   const ex = document.getElementById('_recoveryModal'); if (ex) ex.remove();
@@ -3318,7 +3300,7 @@ function startRecovery() {
           };
           return;
         }
-        step2(u, data.secQ, data.secA);
+        step2(u, data.secA);
       };
       const users = getUsers();
       if (users[u] && users[u].secQ) { _proceed(users[u]); return; }
@@ -3333,8 +3315,8 @@ function startRecovery() {
   };
 
   // ── الخطوة ٢: السؤال + الإجابة + كلمة المرور الجديدة ──
-  const step2 = (u, secQ, secAEnc) => {
-    const question = _SEC_QUESTIONS[secQ] || 'إيه الإجابة اللي حطيتها وقت التسجيل؟';
+  const step2 = (u, secAEnc) => {
+    const question = 'ما لونك المفضّل؟';
     overlay.querySelector('#_recBody').innerHTML = `
       <div style="text-align:center;">
         <div style="font-size:30px;margin-bottom:6px;">🛡️</div>
@@ -8369,9 +8351,16 @@ function _showMultiResults() {
 
   const pk = multiState.playerKey || multiState.playerName;
   if (typeof window.fbMulti !== 'undefined') {
-    // ★ كتابة نهائية مضمونة: ٣ محاولات + كتابة احتياطية بعد ٢ ثانية تاني
-    //   عشان نضمن إن نقطة اللاعب وصلت لFirebase مهما كان
-    const _finalScore = { score: multiState.myScore, done: true, lastSeen: Date.now() };
+    // ★ كتابة نهائية مضمونة: ٣ محاولات + كتابة احتياطية بعد ٢ ثانية
+    //   كمان نكتب في حقل مستقل finalScore + finalName عشان لو في حاجة مسحت score العادية
+    //   الـfinalScore يفضل موجود ومحدش يكتب عليه (write-once بطبيعته)
+    const _finalScore = {
+      score: multiState.myScore,
+      done: true,
+      lastSeen: Date.now(),
+      finalScore: multiState.myScore,
+      finalName: multiState.playerName || (currentUser && (currentUser.name || currentUser.username)) || 'لاعب',
+    };
     const _writeFinal = (attempt) => {
       const p = window.fbMulti.updatePlayer(multiState.roomCode, pk, _finalScore);
       if (p && p.catch) {
@@ -8382,6 +8371,7 @@ function _showMultiResults() {
     };
     _writeFinal(1);
     setTimeout(() => _writeFinal(1), 2000); // كتابة احتياطية تانية بعد ثانيتين
+    setTimeout(() => _writeFinal(1), 5000); // وكمان واحدة بعد ٥ ثواني
     // ★ المضيف يعلّم الغرفة "انتهت" — عشان أي لاعب يرجع لقاعة الانتظار ما يترجعش للعبة القديمة
     if (multiState.isHost) {
       window.fbMulti.updateRoom(multiState.roomCode, { phase: 'finished' }).catch(() => {});
@@ -8390,6 +8380,7 @@ function _showMultiResults() {
     const room = _getRoomData(multiState.roomCode);
     if (room && room.players && room.players[pk]) {
       room.players[pk].score = multiState.myScore;
+      room.players[pk].finalScore = multiState.myScore;
       room.players[pk].done = true;
       if (multiState.isHost) room.phase = 'finished';
       _setRoomData(multiState.roomCode, room);
@@ -8425,6 +8416,13 @@ function _showMultiResults() {
   document.getElementById('multiGameArea').style.display = 'none';
   document.getElementById('multiResults').style.display = 'block';
 
+  // ★ helpers: نختار أفضل قيمة متاحة لكل لاعب (الأولوية لـfinalScore اللي مفيش حاجة تكتب عليه)
+  const _bestScore = (p) => Math.max(
+    (p && typeof p.finalScore === 'number') ? p.finalScore : 0,
+    (p && typeof p.score === 'number') ? p.score : 0
+  );
+  const _bestName = (p) => (p && (p.finalName || p.name)) || 'لاعب';
+
   const finalRoom = window._multiRoomCache;
   const players = finalRoom ? { ...(finalRoom.players || {}) } : {};
   // ★ نقطة اللاعب نفسه تتاخد من المصدر المحلي الموثوق (multiState.myScore) —
@@ -8433,24 +8431,25 @@ function _showMultiResults() {
     const _prev = players[pk] || {};
     players[pk] = {
       ..._prev,
-      name:  _prev.name || multiState.playerName || (currentUser && currentUser.username) || 'أنت',
-      score: Math.max(_prev.score || 0, multiState.myScore || 0),
+      name:  _bestName(_prev) === 'لاعب' ? (multiState.playerName || (currentUser && currentUser.username) || 'أنت') : _bestName(_prev),
+      finalScore: Math.max(_bestScore(_prev), multiState.myScore || 0),
+      score:      Math.max(_bestScore(_prev), multiState.myScore || 0),
     };
   }
-  const sorted = Object.entries(players).filter(([, p]) => p != null).sort((a,b) => (b[1].score||0) - (a[1].score||0));
+  const sorted = Object.entries(players).filter(([, p]) => p != null).sort((a,b) => _bestScore(b[1]) - _bestScore(a[1]));
   const medals = ['🥇','🥈','🥉','🎖️'];
 
   const winner = sorted[0];
   const isWinner = winner && winner[0] === pk;
   document.getElementById('multiTrophyEmoji').textContent = isWinner ? '🏆' : '🎉';
-  document.getElementById('multiWinnerName').textContent = winner ? winner[1].name : '';
+  document.getElementById('multiWinnerName').textContent = winner ? _bestName(winner[1]) : '';
   document.getElementById('multiWinnerMsg').textContent = isWinner ? 'أنت الفائز! بارك الله فيك 🌟' : 'الفائز بالتحدي — بالتوفيق المرة الجاية!';
 
   document.getElementById('multiFinalScores').innerHTML = sorted.map(([u, p], i) =>
     `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,254,249,${i===0?'0.07':'0.03'});border-radius:12px;margin-bottom:6px;border:1px solid rgba(201,151,58,${i===0?'0.3':'0.1'});">
       <span style="font-size:22px;">${medals[i]||'👤'}</span>
-      <span style="flex:1;font-size:15px;color:${i===0?'var(--gold)':'var(--cream)'};">${p.name}${u===pk?' (أنت)':''}</span>
-      <span style="font-size:18px;font-weight:900;color:var(--emerald-light);">${toArabicNum(p.score)}</span>
+      <span style="flex:1;font-size:15px;color:${i===0?'var(--gold)':'var(--cream)'};">${_bestName(p)}${u===pk?' (أنت)':''}</span>
+      <span style="font-size:18px;font-weight:900;color:var(--emerald-light);">${toArabicNum(_bestScore(p))}</span>
     </div>`
   ).join('');
 
@@ -8467,32 +8466,34 @@ function _showMultiResults() {
           const _prev = freshPlayers[pk] || {};
           freshPlayers[pk] = {
             ..._prev,
-            name:  _prev.name || multiState.playerName || (currentUser && currentUser.username) || 'أنت',
-            score: Math.max(_prev.score || 0, multiState.myScore || 0),
+            name:  _bestName(_prev) === 'لاعب' ? (multiState.playerName || (currentUser && currentUser.username) || 'أنت') : _bestName(_prev),
+            finalScore: Math.max(_bestScore(_prev), multiState.myScore || 0),
+            score:      Math.max(_bestScore(_prev), multiState.myScore || 0),
           };
         }
-        const freshSorted = Object.entries(freshPlayers).filter(([, p]) => p != null).sort((a,b) => (b[1].score||0) - (a[1].score||0));
+        const freshSorted = Object.entries(freshPlayers).filter(([, p]) => p != null).sort((a,b) => _bestScore(b[1]) - _bestScore(a[1]));
         const freshWinner = freshSorted[0];
         const freshIsWinner = freshWinner && freshWinner[0] === pk;
         const winnerEl = document.getElementById('multiWinnerName');
         const trophyEl = document.getElementById('multiTrophyEmoji');
         const msgEl    = document.getElementById('multiWinnerMsg');
         if (trophyEl) trophyEl.textContent = freshIsWinner ? '🏆' : '🎉';
-        if (winnerEl) winnerEl.textContent = freshWinner ? freshWinner[1].name : '';
+        if (winnerEl) winnerEl.textContent = freshWinner ? _bestName(freshWinner[1]) : '';
         if (msgEl) msgEl.textContent = freshIsWinner ? 'أنت الفائز! بارك الله فيك 🌟' : 'الفائز بالتحدي — بالتوفيق المرة الجاية!';
         const scoresEl = document.getElementById('multiFinalScores');
         if (scoresEl) scoresEl.innerHTML = freshSorted.map(([u, p], i) =>
           `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,254,249,${i===0?'0.07':'0.03'});border-radius:12px;margin-bottom:6px;border:1px solid rgba(201,151,58,${i===0?'0.3':'0.1'});">
             <span style="font-size:22px;">${medals[i]||'👤'}</span>
-            <span style="flex:1;font-size:15px;color:${i===0?'var(--gold)':'var(--cream)'};">${p.name}${u===pk?' (أنت)':''}</span>
-            <span style="font-size:18px;font-weight:900;color:var(--emerald-light);">${toArabicNum(p.score)}</span>
+            <span style="flex:1;font-size:15px;color:${i===0?'var(--gold)':'var(--cream)'};">${_bestName(p)}${u===pk?' (أنت)':''}</span>
+            <span style="font-size:18px;font-weight:900;color:var(--emerald-light);">${toArabicNum(_bestScore(p))}</span>
           </div>`
         ).join('');
       });
     };
-    // إعادة عرض مرتين: مرة بعد ثانية، ومرة تانية بعد ٣ ثواني (لو حد لسه ما رفعش نقاطه)
+    // إعادة عرض ٣ مرات: ١ثانية، ٣ثواني، ٦ثواني — عشان نلاقي كل اللاعيبة رفعوا finalScore
     setTimeout(() => _refreshResults(1), 1000);
     setTimeout(() => _refreshResults(2), 3000);
+    setTimeout(() => _refreshResults(3), 6000);
   }
 }
 
@@ -8949,11 +8950,12 @@ const _FIREBASE_CONFIG = { apiKey: null };
     function cleanOldRooms() {
       const now = Date.now();
       const cutoff1h = now - 1 * 3600 * 1000; // أقدم من ساعة
+      const cutoff5m = now - 5 * 60 * 1000;   // غرف منتهية: أقدم من ٥ دقائق (عشان اللاعيبة يشوفوا النتايج)
       db.ref('nour_rooms').once('value').then(snap => {
         const rooms = snap.val() || {};
         Object.entries(rooms).forEach(([code, room]) => {
-          // مسح فوري: غرف finished أو closed أو null
-          const isDone = !room || room.phase === 'finished' || room.phase === 'closed';
+          // ★ مسح غرف منتهية بس بعد ٥ دقائق (مش فوري) — عشان كل اللاعيبة يشوفوا النتايج النهائية
+          const isDone = !room || ((room.phase === 'finished' || room.phase === 'closed') && (room.createdAt || 0) < cutoff5m);
           // مسح قديم: أي غرفة أقدم من ساعة بغض النظر عن الـ phase
           const isOld  = !room || (room.createdAt || 0) < cutoff1h;
           // مسح غرف لاعبيها صفر
