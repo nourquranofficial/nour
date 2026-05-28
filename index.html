@@ -3208,6 +3208,39 @@ function loginSuccess(username, data, isGuest=false) {
 window.loginSuccess = loginSuccess;
 
 // ★ السماح للاعب بتغيير اسمه للعرض (للحسابات القديمة + لو حد عايز يغيّر اسمه)
+// ★ عرض كود الاسترجاع للاعب وقت ما يحب (مش popup تلقائي)
+function viewRecoveryCode() {
+  if (!currentUser || currentUser.isGuest) {
+    showToast('🕊️ كود الاسترجاع للحسابات المسجّلة فقط');
+    return;
+  }
+  // لو الحساب القديم لسه مفيهوش كود، نولّده دلوقتي
+  if (!currentUser.recoveryCode) {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    currentUser.recoveryCode = btoa(code);
+    try {
+      const users = getUsers();
+      if (users[currentUser.username]) {
+        users[currentUser.username].recoveryCode = currentUser.recoveryCode;
+        saveUsers(users);
+      }
+    } catch (e) {}
+    if (typeof window.fbSaveFullUserData === 'function') {
+      window.fbSaveFullUserData(currentUser.username, { ...currentUser });
+    }
+    _showRecoveryCodeAlert(code, () => {});
+    return;
+  }
+  // الكود موجود — فك التشفير واعرضه
+  let code;
+  try { code = atob(currentUser.recoveryCode); }
+  catch (e) { showToast('⚠️ مشكلة في قراءة الكود — جرّب تخرج وتدخل تاني'); return; }
+  _showRecoveryCodeAlert(code, () => {});
+}
+window.viewRecoveryCode = viewRecoveryCode;
+
 function editDisplayName() {
   if (!currentUser) return;
   if (currentUser.isGuest) { showToast('🕊️ الضيوف ما يقدروش يغيّروا الاسم — سجّل حساب أولاً'); return; }
@@ -3235,7 +3268,9 @@ function editDisplayName() {
   }
   // حدّث العرض على الشاشة
   const el = document.getElementById('userNameDisplay');
-  if (el) el.innerHTML = '👤 ' + n + ' <span style="font-size:11px;opacity:.55;cursor:pointer;color:var(--gold);" onclick="event.stopPropagation();editDisplayName()" title="غيّر اسمك للعرض">✏️</span>';
+  if (el) el.innerHTML = '👤 ' + n +
+    ' <span style="font-size:11px;opacity:.55;cursor:pointer;color:var(--gold);margin-right:4px;" onclick="event.stopPropagation();editDisplayName()" title="غيّر اسمك للعرض">✏️</span>' +
+    '<span style="font-size:11px;opacity:.55;cursor:pointer;color:var(--gold);" onclick="event.stopPropagation();viewRecoveryCode()" title="شوف كود الاسترجاع بتاعك">🔑</span>';
   showToast('✅ تم تغيير اسمك إلى: ' + n);
   if (typeof renderLeaderboard === 'function') renderLeaderboard();
 }
@@ -3329,7 +3364,9 @@ function _finishLogin(username, isGuest) {
   document.getElementById('loginScreen').classList.add('hide');
   const _disp = _displayName(currentUser || { username });
   const _el = document.getElementById('userNameDisplay');
-  _el.innerHTML = '👤 ' + _disp + ' <span style="font-size:11px;opacity:.55;cursor:pointer;color:var(--gold);" onclick="event.stopPropagation();editDisplayName()" title="غيّر اسمك للعرض">✏️</span>';
+  _el.innerHTML = '👤 ' + _disp +
+    ' <span style="font-size:11px;opacity:.55;cursor:pointer;color:var(--gold);margin-right:4px;" onclick="event.stopPropagation();editDisplayName()" title="غيّر اسمك للعرض">✏️</span>' +
+    (isGuest ? '' : '<span style="font-size:11px;opacity:.55;cursor:pointer;color:var(--gold);" onclick="event.stopPropagation();viewRecoveryCode()" title="شوف كود الاسترجاع بتاعك">🔑</span>');
   if (typeof window.fbSignInAnon === 'function') window.fbSignInAnon();
   if (!isGuest) {
     try { localStorage.setItem('nour_last_user', username); } catch(e) {}
@@ -3343,17 +3380,16 @@ function _finishLogin(username, isGuest) {
   loadMemorizedSurahs();
   showToast('مرحباً ' + _disp + '! 🌙');
 
-  // ★ Migration للحسابات القديمة: لو الحساب مسجّل ومفيهوش كود استرجاع، نولّد له واحد ونعرضه مرة واحدة
+  // ★ Migration للحسابات القديمة: لو الحساب مسجّل ومفيهوش كود استرجاع، نولّد له واحد بصمت
+  //   (مفيش popup كل مرة — اللاعب يقدر يشوف الكود بعدها بزر 🔑 جنب اسمه)
   if (!isGuest && currentUser && !currentUser.recoveryCode) {
     setTimeout(() => {
-      // اتأكد تاني بعد ما Firebase يجيب البيانات الكاملة
       if (currentUser && currentUser.recoveryCode) return; // اتولّد من جهاز تاني
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
       let code = '';
       for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
       const enc = btoa(code);
       currentUser.recoveryCode = enc;
-      // احفظ محلياً
       try {
         const users = getUsers();
         if (users[username]) {
@@ -3361,15 +3397,11 @@ function _finishLogin(username, isGuest) {
           saveUsers(users);
         }
       } catch (e) {}
-      // احفظ في Firebase
       if (typeof window.fbSaveFullUserData === 'function') {
         window.fbSaveFullUserData(username, { ...currentUser, recoveryCode: enc });
       }
-      // أعرض الكود للاعب يحفظه
-      _showRecoveryCodeAlert(code, () => {
-        showToast('✅ احتفظ بالكود ده في مكان آمن');
-      });
-    }, 1500); // ندي Firebase وقت يكمّل الـsync الأول
+      // مفيش popup — اللاعب يشوف الكود وقت ما يحب من زر 🔑
+    }, 1500);
   }
 
   // ★ sync كامل من Firebase عند الدخول (مسجلين فقط)
@@ -7969,8 +8001,18 @@ function _startMultiGame() {
 }
 
 function _renderMultiQuestion() {
+  // ★ حماية نهائية: نتأكد إن السؤال موسّع (لو ساب الحماية قبل كده). idempotent فمأمون.
+  if (multiState.questions[multiState.qIndex] && multiState.questions[multiState.qIndex].blank === undefined) {
+    multiState.questions[multiState.qIndex] = window._expandMultiQ(multiState.questions[multiState.qIndex]);
+  }
   const q = multiState.questions[multiState.qIndex];
   if (!q) { _showMultiResults(); return; }
+  if (q.blank === undefined) {
+    console.error('[multi] q.blank لسه undefined بعد التوسيع — مشكلة في بيانات السؤال', q);
+    showToast('⚠️ مشكلة في تحميل السؤال — انتظر ثانية وحاول');
+    setTimeout(() => _renderMultiQuestion(), 800);
+    return;
+  }
 
   // stop any previous timer
   clearInterval(multiState.questionTimer);
@@ -8158,7 +8200,15 @@ function _multiAnswer(chosen, correct, q, clickedBtn, e) {
   clearInterval(multiState.questionTimer);
   const timeLeft = multiState.timeLeft || 0;
 
-  const isRight = chosen === correct;
+  // ★ مقارنة محصّنة: لو correct undefined (سؤال مضغوط سَلَك من غير توسيع)، نستعيدها من q
+  let actualCorrect = correct;
+  if (actualCorrect === undefined || actualCorrect === null || actualCorrect === '') {
+    actualCorrect = (q && (q.blank !== undefined ? q.blank : q.b));
+  }
+  // مقارنة متسامحة في النوع والمسافات
+  const _norm = v => (v === undefined || v === null) ? '' : String(v).trim();
+  const isRight = _norm(chosen) === _norm(actualCorrect);
+
   // حفظ الغلطة في اللعب الجماعي (مسجل وضيف)
   if (!isRight && typeof saveMistake === 'function') {
     saveMistake(q, chosen);
@@ -8184,8 +8234,8 @@ function _multiAnswer(chosen, correct, q, clickedBtn, e) {
 
   wrap.querySelectorAll('button').forEach(b => {
     const ch = b.dataset.ch;
-    if (ch === correct) b.style.background = 'rgba(46,175,120,0.25)', b.style.borderColor = 'var(--emerald-light)', b.style.color = '#7DFFC9';
-    else if (ch === chosen && !isRight) b.style.background = 'rgba(192,57,43,0.25)', b.style.borderColor = 'var(--red)', b.style.color = '#FF9E9E';
+    if (_norm(ch) === _norm(actualCorrect)) b.style.background = 'rgba(46,175,120,0.25)', b.style.borderColor = 'var(--emerald-light)', b.style.color = '#7DFFC9';
+    else if (_norm(ch) === _norm(chosen) && !isRight) b.style.background = 'rgba(192,57,43,0.25)', b.style.borderColor = 'var(--red)', b.style.color = '#FF9E9E';
     b.style.cursor = 'not-allowed';
   });
 
@@ -8374,6 +8424,47 @@ function _showMultiResults() {
       <span style="font-size:18px;font-weight:900;color:var(--emerald-light);">${toArabicNum(p.score)}</span>
     </div>`
   ).join('');
+
+  // ★ بعد ثانية، نجيب أحدث بيانات من Firebase ونعيد العرض عشان كل اللاعيبة يشوفوا نفس النتيجة
+  //    (ده بيحل مشكلة التضارب لو كتابة لاعب على Firebase وصلت متأخرة)
+  if (typeof window.fbMulti !== 'undefined' && multiState.roomCode) {
+    const _refreshResults = (attempt) => {
+      window.fbMulti.getRoom(multiState.roomCode, (freshRoom) => {
+        if (!freshRoom || !freshRoom.players) return;
+        window._multiRoomCache = freshRoom;
+        const freshPlayers = { ...(freshRoom.players || {}) };
+        // override لنقطة اللاعب نفسه
+        if (pk) {
+          const _prev = freshPlayers[pk] || {};
+          freshPlayers[pk] = {
+            ..._prev,
+            name:  _prev.name || multiState.playerName || (currentUser && currentUser.username) || 'أنت',
+            score: Math.max(_prev.score || 0, multiState.myScore || 0),
+          };
+        }
+        const freshSorted = Object.entries(freshPlayers).filter(([, p]) => p != null).sort((a,b) => (b[1].score||0) - (a[1].score||0));
+        const freshWinner = freshSorted[0];
+        const freshIsWinner = freshWinner && freshWinner[0] === pk;
+        const winnerEl = document.getElementById('multiWinnerName');
+        const trophyEl = document.getElementById('multiTrophyEmoji');
+        const msgEl    = document.getElementById('multiWinnerMsg');
+        if (trophyEl) trophyEl.textContent = freshIsWinner ? '🏆' : '🎉';
+        if (winnerEl) winnerEl.textContent = freshWinner ? freshWinner[1].name : '';
+        if (msgEl) msgEl.textContent = freshIsWinner ? 'أنت الفائز! بارك الله فيك 🌟' : 'الفائز بالتحدي — بالتوفيق المرة الجاية!';
+        const scoresEl = document.getElementById('multiFinalScores');
+        if (scoresEl) scoresEl.innerHTML = freshSorted.map(([u, p], i) =>
+          `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,254,249,${i===0?'0.07':'0.03'});border-radius:12px;margin-bottom:6px;border:1px solid rgba(201,151,58,${i===0?'0.3':'0.1'});">
+            <span style="font-size:22px;">${medals[i]||'👤'}</span>
+            <span style="flex:1;font-size:15px;color:${i===0?'var(--gold)':'var(--cream)'};">${p.name}${u===pk?' (أنت)':''}</span>
+            <span style="font-size:18px;font-weight:900;color:var(--emerald-light);">${toArabicNum(p.score)}</span>
+          </div>`
+        ).join('');
+      });
+    };
+    // إعادة عرض مرتين: مرة بعد ثانية، ومرة تانية بعد ٣ ثواني (لو حد لسه ما رفعش نقاطه)
+    setTimeout(() => _refreshResults(1), 1000);
+    setTimeout(() => _refreshResults(2), 3000);
+  }
 }
 
 // يعيد بناء أسئلة جديدة بنفس إعدادات الغرفة (نفس السورة/العدد/المستوى)
