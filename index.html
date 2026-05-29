@@ -1206,13 +1206,11 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
   function toFbEmail(email) { return email.trim().toLowerCase(); }
   function padPass(p) { return p + '__nr'; }
 
-  // ★ إعادة تعيين كلمة المرور — اللينك يفتح التطبيق مباشرة
+  // ★ إعادة تعيين كلمة المرور — اللينك يفتح صفحة Firebase ثم يرجع للتطبيق
   window.fbResetPassword = function(email, onSuccess, onError) {
-    const actionSettings = {
+    sendPasswordResetEmail(auth, email.trim().toLowerCase(), {
       url: 'https://nourquranofficial.github.io/nour/',
-      handleCodeInApp: true,
-    };
-    sendPasswordResetEmail(auth, email.trim().toLowerCase(), actionSettings)
+    })
       .then(() => onSuccess && onSuccess())
       .catch(e => onError && onError(e.code));
   };
@@ -2445,6 +2443,7 @@ function _callWhenReady(fn, args) {
       <div class="logo-title">نـور</div>
       <div class="logo-sub">تحدي حفظ القرآن الكريم</div>
       <div style="display:inline-block;margin-top:6px;padding:3px 12px;background:rgba(201,151,58,0.12);border:1px solid rgba(201,151,58,0.35);border-radius:20px;font-size:10px;color:rgba(245,217,139,0.7);letter-spacing:0.5px;">★ الموقع الرسمي الوحيد ★</div>
+      <div style="margin-top:6px;font-size:10px;color:rgba(245,217,139,0.4);">(حقوق الصوت محمية للشيخ مشاري بن راشد العفاسي)</div>
     </div>
 
     <!-- USER BAR -->
@@ -6200,9 +6199,8 @@ function handleResult(isRight, e) {
     const blankLetters = q.blank ? q.blank.replace(/[\s\u064B-\u065F\u0670]/g,'').length : 1;
     // النقاط والحسنات = حروف الفراغ × مضاعف اللفل
     const baseEarned = state.isReviewMode ? basePts : Math.round(blankLetters * hasanatMult);
-    let pts = baseEarned;
-    if (state.combo >= 2) pts = Math.round(pts * Math.min(1 + (state.combo-1)*0.5, 4));
-    if (state.mode==='timed' && state.timeLeft > 0) pts += state.timeLeft * 2;
+    // ★ النقاط = عدد الحروف × مضاعف المستوى — بس وخلاص، مفيش زيادة
+    const pts = baseEarned;
     state.score += pts;
     const hasanat = pts; // ★ نفس الرقم المعروض — شامل الـcombo والسرعة
     state.sessionHasanat += hasanat;
@@ -8465,25 +8463,15 @@ function _multiAnswer(chosen, correct, q, clickedBtn, e) {
     saveMistake(q, chosen);
   }
   if (isRight) {
-    // نقاط سرعة: ١٠ أساس + حتى ١٥ bonus حسب الوقت
-    const speedBonus = Math.round(timeLeft * 1.0); // كل ثانية = نقطة إضافية
-    // ★ بنطبّق مضاعف المستوى زي اللعبة العادية — عشان النقاط تتطابق
-    const _lvl = (typeof LEVEL_DEFS !== 'undefined' && currentUser && LEVEL_DEFS[currentUser.level || 0]);
-    const _mult = (_lvl && _lvl.hasanatMult) ? _lvl.hasanatMult : 1;
-    const earned = Math.round((10 + speedBonus) * _mult);
+    // ★ الغرفة: ٥ نقاط لكل إجابة صح — ثابتة للكل
+    const earned = 5;
     multiState.myScore += earned;
-    // ★ _peakScore: أعلى نقطة وصلها اللاعب — بتزيد بس ومش بترجع للوراء أبدًا
     multiState._peakScore = Math.max(multiState._peakScore || 0, multiState.myScore);
-    _bankMultiPoints(earned); // ★ بنك فوري: النقطة تترفع لحظة كسبها — مضمونة حتى لو اتقطع قبل النتايج
+    _bankMultiPoints(earned);
     const bonusEl = document.getElementById('multiSpeedBonus');
     if (bonusEl) {
-      if (speedBonus > 0) {
-        bonusEl.textContent = `⚡ +${toArabicNum(earned)} (سرعة +${toArabicNum(speedBonus)})`;
-        bonusEl.style.color = '#7DFFC9';
-      } else {
-        bonusEl.textContent = `+${toArabicNum(earned)}`;
-        bonusEl.style.color = 'rgba(245,217,139,0.6)';
-      }
+      bonusEl.textContent = `+${toArabicNum(earned)}`;
+      bonusEl.style.color = 'rgba(245,217,139,0.6)';
     }
   }
   document.getElementById('multiMyScore').textContent = toArabicNum(multiState.myScore);
