@@ -1850,17 +1850,17 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
     if (window.currentUser && window.currentUser.username === username) {
       window.currentUser.updatedAt = Math.max(window.currentUser.updatedAt || 0, ts);
     }
-    // transaction: الإدخال الأحدث (updatedAt الأكبر) يكسب — حتى لو قيمته أقل (تصفير)
+    // transaction: بنقارن الـtimestamp بس ★ دايمًا بناخد الأعلى في النقاط — النقاط مش بتنقص أبدًا
     runTransaction(entryRef, (cur) => {
       if (cur && (cur.updatedAt || 0) > ts) return cur; // فيه أحدث منه — سيبه
       return {
         name:             username,
-        totalHasanat:     data.totalHasanat || 0,
-        totalScore:       data.totalScore   || 0,
-        totalGames:       data.totalGames   || 0,
+        // ★★ ناخد الأعلى بين القديم والجديد — مستحيل تنقص النقاط حتى لو حصل overwrite خطأ
+        totalHasanat:     Math.max((cur && cur.totalHasanat) || 0, data.totalHasanat || 0),
+        totalScore:       Math.max((cur && cur.totalScore)   || 0, data.totalScore   || 0),
+        totalGames:       Math.max((cur && cur.totalGames)   || 0, data.totalGames   || 0),
         isGuest:          isGuest,
         updatedAt:        ts,
-        // علامة مسح الغلطات (تتوحّد عبر الأجهزة) — نحافظ على الأحدث
         mistakesClearedAt: Math.max((cur && cur.mistakesClearedAt) || 0, data.mistakesClearedAt || 0),
       };
     }).catch(e => console.error('fbSaveUser error:', e));
@@ -2609,6 +2609,7 @@ function _callWhenReady(fn, args) {
           <button onclick="multiPlayAgain()" style="padding:14px;background:linear-gradient(135deg,var(--gold),#E8B84B);border:none;border-radius:14px;font-family:'Cairo',sans-serif;font-size:15px;font-weight:700;color:var(--ink);cursor:pointer;">🔄 مرة تانية</button>
           <button onclick="goHome()" style="padding:14px;background:rgba(255,254,249,0.05);border:1px solid rgba(201,151,58,0.25);border-radius:14px;font-family:'Cairo',sans-serif;font-size:15px;font-weight:700;color:var(--gold-light);cursor:pointer;">🏠 الرئيسية</button>
         </div>
+        <div style="text-align:center;margin-top:10px;font-size:9px;color:rgba(245,217,139,0.25);">نسخة ١٠</div>
       </div>
     </div>
   </div>
@@ -7864,6 +7865,7 @@ function _startMultiGame() {
   multiState.phase = 'playing';
   multiState.qIndex = 0;
   multiState.myScore = 0;
+  multiState._peakScore = 0; // ★ reset لكل لعبة جديدة
   multiState._scoreSavedThisRound = false; // ★ reset عشان نقاط الجولة الجديدة تتحسب
   document.getElementById('multiWaiting').style.display = 'none';
   document.getElementById('multiGameArea').style.display = 'block';
@@ -8089,6 +8091,8 @@ function _multiAnswer(chosen, correct, q, clickedBtn, e) {
     const speedBonus = Math.round(timeLeft * 1.0); // كل ثانية = نقطة إضافية
     const earned = 10 + speedBonus;
     multiState.myScore += earned;
+    // ★ _peakScore: أعلى نقطة وصلها اللاعب — بتزيد بس ومش بترجع للوراء أبدًا
+    multiState._peakScore = Math.max(multiState._peakScore || 0, multiState.myScore);
     _bankMultiPoints(earned); // ★ بنك فوري: النقطة تترفع لحظة كسبها — مضمونة حتى لو اتقطع قبل النتايج
     const bonusEl = document.getElementById('multiSpeedBonus');
     if (bonusEl) {
@@ -8466,6 +8470,7 @@ function multiPlayAgain() {
   if (!multiState.isHost) {
     multiState.phase = 'waiting';
     multiState.myScore = 0;
+    multiState._peakScore = 0;
     multiState.qIndex = 0;
     multiState._scoreSavedThisRound = false;
     document.getElementById('multiResults').style.display = 'none';
