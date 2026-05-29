@@ -1206,11 +1206,9 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
   function toFbEmail(email) { return email.trim().toLowerCase(); }
   function padPass(p) { return p + '__nr'; }
 
-  // ★ إعادة تعيين كلمة المرور — اللينك يفتح صفحة Firebase ثم يرجع للتطبيق
+  // ★ إعادة تعيين كلمة المرور — بدون continueUrl عشان مش بيحتاج authorized domain
   window.fbResetPassword = function(email, onSuccess, onError) {
-    sendPasswordResetEmail(auth, email.trim().toLowerCase(), {
-      url: 'https://nourquranofficial.github.io/nour/',
-    })
+    sendPasswordResetEmail(auth, email.trim().toLowerCase())
       .then(() => onSuccess && onSuccess())
       .catch(e => onError && onError(e.code));
   };
@@ -1235,10 +1233,10 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
       .catch(() => cb && cb([]));
   };
 
-  // ★ Google — popup صغير زي ما بتكون عادي
+  // ★ Google — popup، بدون prompt عشان المستخدم يدخل فوراً بدون تأكيد زيادة
   window.fbGoogleSignIn = function(onSuccess, onError) {
     const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: 'select_account' });
+    // لا نضيف prompt عشان المستخدم المتعرف يدخل مباشرة
     signInWithPopup(auth, provider)
       .then(result => {
         const u = result.user;
@@ -3414,7 +3412,7 @@ function _sendResetEmail(email) {
   if (typeof window.fbResetPassword === 'function') {
     window.fbResetPassword(email,
       () => {
-        showLoginErr('✅ تم! افتح بريدك ودوس الرابط — بعدها ارجع وادخل بالباسورد الجديد');
+        showLoginErr('✅ تم الإرسال! افتح بريدك (وافتش في Spam لو مش لاقيه) — دوس الرابط وغيّر الباسورد');
       },
       (code) => {
         if (code === 'auth/too-many-requests') {
@@ -6202,8 +6200,22 @@ function handleResult(isRight, e) {
     // ★ النقاط = عدد الحروف × مضاعف المستوى — بس وخلاص، مفيش زيادة
     const pts = baseEarned;
     state.score += pts;
-    const hasanat = pts; // ★ نفس الرقم المعروض — شامل الـcombo والسرعة
+    const hasanat = pts;
     state.sessionHasanat += hasanat;
+
+    // ★★ بنك فوري — النقطة تترفع لحظتها حتى لو خرج قبل النهاية
+    if (!state.isReviewMode && !currentUser.isGuest) {
+      currentUser.totalScore   = (currentUser.totalScore   || 0) + pts;
+      currentUser.totalHasanat = (currentUser.totalHasanat || 0) + pts;
+      window.currentUser = currentUser;
+      if (typeof window.fbIncrementScore === 'function') {
+        window.fbIncrementScore(currentUser.username, pts, pts, 0);
+      }
+    } else if (!state.isReviewMode && currentUser.isGuest) {
+      currentUser.totalScore   = (currentUser.totalScore   || 0) + pts;
+      currentUser.totalHasanat = (currentUser.totalHasanat || 0) + pts;
+      window.currentUser = currentUser;
+    }
     document.getElementById('liveScore').textContent = toArabicNum(state.score);
     const comboSuffix = state.combo >= 2 ? ` 🔥×${state.combo}` : '';
     fb.className = 'feedback correct show';
@@ -6271,17 +6283,14 @@ function showResults() {
   const total = state.questions.length;
   const accuracy = Math.round((state.correct/total)*100);
 
-  // احفظ القيم القديمة عشان نحسب الفرق
-  const _scoreAdd   = state.score;
-  const _hasanatAdd = state.sessionHasanat;
-  // صفّر فوراً لمنع الإضافة مرتين لو رجع بيت بعد النتائج
+  // ★ النقاط اتحفظت لحظيًا مع كل إجابة صح — هنا بس نسجّل اللعبة والـ streak
+  const _scoreAdd   = state.score;      // للعرض فقط
+  const _hasanatAdd = state.sessionHasanat; // للعرض فقط
   state.score = 0;
   state.sessionHasanat = 0;
 
-  currentUser.totalScore   += _scoreAdd;
+  // عدّ اللعبة والـ streak فقط (النقاط اتضافت فعلاً مع كل إجابة)
   currentUser.totalGames++;
-  currentUser.totalHasanat += _hasanatAdd;
-
   const today = new Date().toDateString();
   if (currentUser.lastPlay !== today) {
     const yesterday = new Date(Date.now()-86400000).toDateString();
@@ -6289,7 +6298,7 @@ function showResults() {
     currentUser.lastPlay = today;
   }
 
-  // حفظ محلي فوري
+  // حفظ محلي
   const _localUsers = getUsers();
   _localUsers[currentUser.username] = {
     ...(_localUsers[currentUser.username] || {}),
@@ -6304,9 +6313,9 @@ function showResults() {
   };
   saveUsers(_localUsers);
 
-  // حفظ على Firebase بشكل atomic (يجمع صح مع أي جهاز تاني)
+  // Firebase — عدّ اللعبة + streak فقط (النقاط اتحفظت لحظيًا فعلاً)
   if (!currentUser.isGuest && typeof window.fbIncrementScore === 'function') {
-    window.fbIncrementScore(currentUser.username, _scoreAdd, _hasanatAdd, 1);
+    window.fbIncrementScore(currentUser.username, 0, 0, 1); // 0 نقاط — بس +1 لعبة
     // حفظ streak وlastPlay منفصلاً
     if (typeof window.fbSaveFullUserData === 'function') {
       window.fbSaveFullUserData(currentUser.username, {
@@ -8419,20 +8428,17 @@ function _bankMultiPoints(earned) {
   if (!earned || earned <= 0) return;
   const _cu = currentUser || window.currentUser;
   if (!_cu) return;
+  // ★ تحديث محلي فوري دايماً — بغض النظر عن Firebase
+  _cu.totalHasanat = (_cu.totalHasanat || 0) + earned;
+  _cu.totalScore   = (_cu.totalScore   || 0) + earned;
+  currentUser = _cu; window.currentUser = _cu;
   if (!_cu.isGuest) {
-    // مسجّل: زيادة atomic على السحابة (fbIncrementScore بتحدّث الرصيد المحلي + اللوحة في .then)
+    // مسجّل: رفع atomic على Firebase
     if (typeof window.fbIncrementScore === 'function') {
       window.fbIncrementScore(_cu.username, earned, earned, 0);
-    } else {
-      _cu.totalHasanat = (_cu.totalHasanat || 0) + earned;
-      _cu.totalScore   = (_cu.totalScore   || 0) + earned;
-      saveCurrentUser();
     }
   } else {
-    // ضيف: تحديث محلي + رفع للوحة بالقيمة المطلقة
-    _cu.totalHasanat = (_cu.totalHasanat || 0) + earned;
-    _cu.totalScore   = (_cu.totalScore   || 0) + earned;
-    currentUser = _cu; window.currentUser = _cu;
+    // ضيف: رفع للوحة بالقيمة المطلقة
     if (typeof window.fbSaveUser === 'function') {
       window.fbSaveUser(_cu.username, { totalHasanat:_cu.totalHasanat, totalScore:_cu.totalScore, totalGames:_cu.totalGames||0, isGuest:true });
     }
@@ -8463,15 +8469,16 @@ function _multiAnswer(chosen, correct, q, clickedBtn, e) {
     saveMistake(q, chosen);
   }
   if (isRight) {
-    // ★ الغرفة: ٥ نقاط لكل إجابة صح — ثابتة للكل
-    const earned = 5;
+    // ★ نقاط الغرفة: ١٠ أساس + bonus سرعة (كل ثانية متبقية = نقطة)
+    const speedBonus = Math.max(0, Math.round(timeLeft * 1.0));
+    const earned = 10 + speedBonus;
     multiState.myScore += earned;
     multiState._peakScore = Math.max(multiState._peakScore || 0, multiState.myScore);
     _bankMultiPoints(earned);
     const bonusEl = document.getElementById('multiSpeedBonus');
     if (bonusEl) {
-      bonusEl.textContent = `+${toArabicNum(earned)}`;
-      bonusEl.style.color = 'rgba(245,217,139,0.6)';
+      bonusEl.textContent = speedBonus > 0 ? `+${toArabicNum(earned)} ⚡` : `+${toArabicNum(earned)}`;
+      bonusEl.style.color = speedBonus > 0 ? '#7DFFC9' : 'rgba(245,217,139,0.6)';
     }
   }
   document.getElementById('multiMyScore').textContent = toArabicNum(multiState.myScore);
