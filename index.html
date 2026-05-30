@@ -1811,9 +1811,9 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 
   onAuthStateChanged(auth, (user) => {
     // ★ لو اليوزر طلب logout صريح — منعملش أي دخول تلقائي
-    if (window._isLoggingOut) return;
     if (!user) {
       _authDone = false;
+      if (window._isLoggingOut) return; // لو لسه بيخرج — ما نعملش أي دخول تلقائي
       // ★ لو Firebase قال "مفيش مستخدم" وفيه pending autoLogin — الغيه
       if (window._pendingAutoLogin) {
         window._pendingAutoLogin = null;
@@ -3263,6 +3263,7 @@ window.togglePw = togglePw;
 })();
 
 function doLogin() {
+  window._isLoggingOut = false; // ★ اليوزر بيحاول يدخل — امسح علم الخروج
   const user = document.getElementById('loginUser').value.trim().toLowerCase();
   const pass = document.getElementById('loginPass').value;
   if (!user || !pass) { showLoginErr('أدخل الإيميل وكلمة المرور'); return; }
@@ -3498,6 +3499,7 @@ function _sendForgotEmail() {
         totalHasanat: Math.max((fbData && fbData.totalHasanat) || 0, lData.totalHasanat || 0),
       };
       closeForgotPassModal();
+      if (typeof window._markAuthDone === 'function') window._markAuthDone();
       if (typeof window.loginSuccess === 'function') {
         window.loginSuccess(email, mergedData);
       }
@@ -3868,8 +3870,7 @@ function doLogout() {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
   document.getElementById('homeScreen') && document.getElementById('homeScreen').classList.add('show');
   document.getElementById('loginScreen').classList.remove('hide');
-  // امسح الـ flag بعد ما شاشة الدخول اتظهرت
-  setTimeout(() => { window._isLoggingOut = false; }, 1000);
+  // _isLoggingOut هيتمسح في doLogin لما اليوزر يدخل تاني
 }
 
 function saveCurrentUser() {
