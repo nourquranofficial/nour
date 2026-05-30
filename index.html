@@ -3609,26 +3609,23 @@ function _sendForgotEmail() {
 
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
 
-  window._loggedOut = false;
-  window._cancelBgAuth = false;
+  // كتابة الباسورد في Firebase في الخلفية
   if (typeof window.fbForgotPasswordLogin === 'function') {
     window.fbForgotPasswordLogin(email, newPass, () => {}, () => {});
   }
 
-  // أظهر رسالة نجاح مؤقتة ثم reload تلقائي
-  const _modal = document.getElementById('forgotPassModal');
-  if (_modal) {
-    const _inner = _modal.querySelector('div');
-    if (_inner) _inner.innerHTML =
-      '<div style="text-align:center;padding:30px 0;">' +
-      '<div style="font-size:52px;margin-bottom:12px;">✅</div>' +
-      '<div style="font-size:18px;font-weight:700;color:var(--gold);font-family:Cairo,sans-serif;">تم حفظ الباسورد!</div>' +
-      '<div style="font-size:13px;color:rgba(245,217,139,0.45);font-family:Cairo,sans-serif;margin-top:8px;">جاري الدخول...</div>' +
-      '</div>';
-  }
+  // ★ الحل النهائي: أغلق الـ modal + logout + رجّع لشاشة الدخول مع الإيميل جاهز
+  closeForgotPassModal();
+  showToast('✅ تم تغيير الباسورد — ادخل بالباسورد الجديد');
 
-  // reload بعد ثانية — يعطي الـ keyboard وقت يقفل ويكتب bypassAuth
-  setTimeout(() => { window.location.reload(); }, 1000);
+  setTimeout(() => {
+    doLogout();
+    // بعد الـ logout، جهّز شاشة الدخول بالإيميل
+    setTimeout(() => {
+      const _emailEl = document.getElementById('emailInput');
+      if (_emailEl) { _emailEl.value = email; _emailEl.focus(); }
+    }, 300);
+  }, 600);
 }
 
 window.doForgotPassword = doForgotPassword;
@@ -3953,6 +3950,12 @@ function _finishLogin(username, isGuest) {
     if (_lsEl) _lsEl.style.pointerEvents = 'none';
     if (_hsEl) _hsEl.style.pointerEvents = '';
   }, 400);
+  // ★ تأكد إن الاسم موجود قبل العرض — جرب كل المصادر
+  if (currentUser && (!currentUser.name || currentUser.name.includes('@'))) {
+    const _n = (typeof window._getStoredName === 'function' ? window._getStoredName(username) : null)
+      || (() => { try { return JSON.parse(localStorage.getItem('nour_users')||'{}')[username]?.name; } catch(e){} return null; })();
+    if (_n && !_n.includes('@') && _n.trim()) currentUser.name = _n.trim();
+  }
   const _disp = _displayName(currentUser || { username });
   const _el = document.getElementById('userNameDisplay');
   _el.innerHTML = '👤 ' + _disp + ' <button onclick="event.stopPropagation();editDisplayName()" title="غيّر اسمك للعرض" style="background:none;border:none;font-size:13px;cursor:pointer;color:var(--gold);opacity:.7;padding:2px 4px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;">✏️</button>';
