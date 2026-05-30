@@ -3797,12 +3797,13 @@ function loginSuccess(username, data, isGuest=false) {
       }
       updateHomeStats();
     }
-    // لو اللوجين screen لا يزال ظاهر، أخفيه
-    const ls = document.getElementById('loginScreen');
-    if (ls && !ls.classList.contains('hide')) _finishLogin(username, isGuest);
+    // ★ دايماً نحدّث الـ display حتى لو loginScreen مخبّي (من attemptAutoLogin)
+    currentUser = cu; // update with latest data
+    window.currentUser = cu;
+    _finishLogin(username, isGuest);
     return;
   }
-  // لو في مستخدم آخر logged in فعلاً (مش مجرد بقايا session ولا registering) — لا تستبدله
+  // لو في مستخدم آخر logged in فعلاً — لا تستبدله
   if (window.currentUser && window.currentUser.username !== username && !window.currentUser._fromAuth && !window._registering) return;
   currentUser = { username, isGuest, ...(data || {}) };
   window.currentUser = currentUser;
