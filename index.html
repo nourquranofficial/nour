@@ -1142,7 +1142,7 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getDatabase, ref, set, remove, onValue, get, update, onDisconnect, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, signInAnonymously, sendPasswordResetEmail, GoogleAuthProvider, FacebookAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, fetchSignInMethodsForEmail, verifyPasswordResetCode, confirmPasswordReset } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, signInAnonymously, sendPasswordResetEmail, GoogleAuthProvider, FacebookAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, fetchSignInMethodsForEmail, verifyPasswordResetCode, confirmPasswordReset, EmailAuthProvider, linkWithCredential, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDDod7rBSs6Oa71JufQye6PUkUHZ7iZCVk",
@@ -1420,10 +1420,20 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
       new Promise((_, rej) => setTimeout(() => rej('timeout'), 6000)),
     ]);
 
+    // ★ بعد كتابة bypassAuth — نربط/نحدّث Firebase Auth بالباسورد الجديد
+    // عشان لو خرجوا وعملوا تغيير تاني، signInWithEmailAndPassword تشتغل بالقديم
+    const _syncFirebaseAuth = () => {
+      if (!auth.currentUser || auth.currentUser.isAnonymous) return;
+      const cred = EmailAuthProvider.credential(toFbEmail(email), padPass(newPass));
+      // جرّب link أولاً (لو مش مربوط email/password) وإلا update
+      linkWithCredential(auth.currentUser, cred)
+        .catch(() => updatePassword(auth.currentUser, padPass(newPass)).catch(() => {}));
+    };
+
     // ★ خطوة ١: لو في session حالية مش anonymous → اكتب مباشرة
     if (auth.currentUser && !auth.currentUser.isAnonymous) {
       _writeBypass()
-        .then(() => onSuccess('bypass'))
+        .then(() => { _syncFirebaseAuth(); onSuccess('bypass'); })
         .catch(() => onSuccess('local'));
       return;
     }
@@ -1447,7 +1457,7 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 
         _tryOldPass
           .then(() => _writeBypass())
-          .then(() => onSuccess('firebase'))
+          .then(() => { _syncFirebaseAuth(); onSuccess('firebase'); })
           .catch(() => {
             // ★ خطوة ٤: anonymous fallback (لو مفعّل)
             signInAnonymously(auth)
@@ -2829,7 +2839,7 @@ function _callWhenReady(fn, args) {
         </div>
         <div id="multiWaitMsg" style="text-align:center;font-size:13px;color:rgba(245,217,139,0.4);margin-bottom:14px;">⏳ في انتظار اللاعبين...</div>
         <button id="multiStartBtn" onclick="multiStartGame()" style="display:none;width:100%;padding:16px;background:linear-gradient(135deg,var(--emerald-light),var(--emerald-mid));border:none;border-radius:14px;font-family:'Cairo',sans-serif;font-size:17px;font-weight:700;color:white;cursor:pointer;">🎯 ابدأ التحدي!</button>
-        <button onclick="multiLeaveRoom()" style="width:100%;padding:12px;margin-top:10px;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:12px;font-family:'Cairo',sans-serif;font-size:14px;color:rgba(255,120,100,0.7);cursor:pointer;">🚪 مغادرة الغرفة</button>
+        <button onclick="multiLeaveRoom(); showMultiScreen();" style="width:100%;padding:12px;margin-top:10px;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:12px;font-family:'Cairo',sans-serif;font-size:14px;color:rgba(255,120,100,0.7);cursor:pointer;">🚪 مغادرة الغرفة</button>
       </div>
 
       <!-- Live Game Area -->
@@ -2881,7 +2891,7 @@ function _callWhenReady(fn, args) {
         <div id="multiFinalScores" style="background:rgba(255,254,249,0.03);border:1px solid rgba(201,151,58,0.15);border-radius:16px;padding:16px;margin-bottom:20px;"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <button id="multiPlayAgainBtn" onclick="multiPlayAgain()" style="padding:14px;background:linear-gradient(135deg,var(--gold),#E8B84B);border:none;border-radius:14px;font-family:'Cairo',sans-serif;font-size:15px;font-weight:700;color:var(--ink);cursor:pointer;">🔄 مرة تانية</button>
-          <button onclick="multiLeaveRoom()" style="padding:14px;background:rgba(255,254,249,0.05);border:1px solid rgba(201,151,58,0.25);border-radius:14px;font-family:'Cairo',sans-serif;font-size:15px;font-weight:700;color:var(--gold-light);cursor:pointer;">🏠 الرئيسية</button>
+          <button onclick="multiLeaveRoom(); goHome();" style="padding:14px;background:rgba(255,254,249,0.05);border:1px solid rgba(201,151,58,0.25);border-radius:14px;font-family:'Cairo',sans-serif;font-size:15px;font-weight:700;color:var(--gold-light);cursor:pointer;">🏠 الرئيسية</button>
         </div>
         <div style="text-align:center;margin-top:10px;font-size:9px;color:rgba(245,217,139,0.25);">نسخة ١٠</div>
       </div>
@@ -3540,64 +3550,65 @@ function _sendForgotEmail() {
     errEl.style.color='#FF9E9E'; errEl.textContent='⚠️ انتظر لحظة وحاول تاني'; return;
   }
 
-  window.fbForgotPasswordLogin(email, newPass, (type) => {
-    // حفظ الباسورد الجديد محلياً مع الحفاظ على الاسم الموجود
-    try {
-      const _lu = JSON.parse(localStorage.getItem('nour_users') || '{}');
-      if (!_lu[email]) _lu[email] = {};
-      const _existingName = _lu[email].name || localStorage.getItem('nour_name_' + email);
-      _lu[email].password = btoa(newPass);
-      _lu[email].email = email;
-      if (_existingName) _lu[email].name = _existingName; // حافظ على الاسم
-      localStorage.setItem('nour_users', JSON.stringify(_lu));
-      localStorage.setItem('nour_last_user', email);
-    } catch(e) {}
+  // ★ حفظ الباسورد محلياً فوراً — مش بننتظر Firebase
+  try {
+    const _lu = JSON.parse(localStorage.getItem('nour_users') || '{}');
+    if (!_lu[email]) _lu[email] = {};
+    const _existingName = _lu[email].name || localStorage.getItem('nour_name_' + email);
+    _lu[email].password = btoa(newPass);
+    _lu[email].email = email;
+    if (_existingName) _lu[email].name = _existingName;
+    localStorage.setItem('nour_users', JSON.stringify(_lu));
+    localStorage.setItem('nour_last_user', email);
+  } catch(e) {}
 
-    const _getLocal = () => { try { return JSON.parse(localStorage.getItem('nour_users') || '{}')[email] || {}; } catch(e) { return {}; } };
-
-    const _finishLogin = (fbData) => {
-      // ★ لو المستخدم عمل خروج أثناء التحميل — لا ندخّله
-      if (window._loggedOut) return;
-      const lData = _getLocal();
-      const mergedData = {
-        ...(fbData || {}),
-        ...lData,
-        email,
-        name: (typeof window._getStoredName === 'function' ? window._getStoredName(email) : null) || (fbData && fbData.name) || lData.name || '',
-        isGuest: false,
-        password: btoa(newPass),
-        totalScore:   Math.max((fbData && fbData.totalScore) || 0, lData.totalScore || 0),
-        totalGames:   Math.max((fbData && fbData.totalGames) || 0, lData.totalGames || 0),
-        totalHasanat: Math.max((fbData && fbData.totalHasanat) || 0, lData.totalHasanat || 0),
-      };
-      closeForgotPassModal();
-      if (typeof window._markAuthDone === 'function') window._markAuthDone();
-      if (typeof window.loginSuccess === 'function') {
-        window.loginSuccess(email, mergedData);
-      }
-      showToast('✅ تم حفظ الباسورد — دخلت!');
+  // ★ timeout شامل — لو Firebase علقت، ندخّل محلياً بعد 7 ثواني
+  let _done = false;
+  const _safeFinish = (fbData) => {
+    if (_done) return;
+    _done = true;
+    if (window._loggedOut) return;
+    const _lData = (() => { try { return JSON.parse(localStorage.getItem('nour_users') || '{}')[email] || {}; } catch(e) { return {}; } })();
+    const mergedData = {
+      ...(fbData || {}), ..._lData, email,
+      name: (typeof window._getStoredName === 'function' ? window._getStoredName(email) : null)
+            || (fbData && fbData.name) || _lData.name || '',
+      isGuest: false, password: btoa(newPass),
+      totalScore:   Math.max((fbData && fbData.totalScore)   || 0, _lData.totalScore   || 0),
+      totalGames:   Math.max((fbData && fbData.totalGames)   || 0, _lData.totalGames   || 0),
+      totalHasanat: Math.max((fbData && fbData.totalHasanat) || 0, _lData.totalHasanat || 0),
     };
+    closeForgotPassModal();
+    if (typeof window._markAuthDone === 'function') window._markAuthDone();
+    if (typeof window.loginSuccess === 'function') window.loginSuccess(email, mergedData);
+    showToast('✅ تم حفظ الباسورد — دخلت!');
+  };
 
-    if (type === 'firebase') {
-      // دخل بـ Firebase Auth — جيب البيانات وادخّل
-      closeForgotPassModal();
-      if (typeof window.fbGetUserData === 'function') {
-        window.fbGetUserData(email, (data) => _finishLogin(data));
-      } else {
-        showToast('✅ تم تغيير الباسورد — دخلت!');
-      }
-    } else {
-      if (typeof window.fbGetUserData === 'function') {
-        window.fbGetUserData(email, (data) => _finishLogin(data));
-      } else {
-        _finishLogin(null);
-      }
+  // timeout: لو علقت بعد 7 ثواني — ادخّل محلياً
+  const _timeoutId = setTimeout(() => {
+    if (!_done) { _safeFinish(null); }
+  }, 7000);
+
+  window.fbForgotPasswordLogin(email, newPass, (type) => {
+    // ★ ادخّل فوراً بالبيانات المحلية — مش بننتظر Firebase تاني
+    _safeFinish(null);
+    // ★ حدّث البيانات من Firebase في الخلفية بهدوء
+    if (type !== 'local' && typeof window.fbGetUserData === 'function') {
+      window.fbGetUserData(email, (fbData) => {
+        if (!fbData || !currentUser || currentUser.username !== email) return;
+        if (fbData.totalScore > (currentUser.totalScore || 0)) {
+          currentUser.totalScore   = fbData.totalScore;
+          currentUser.totalHasanat = fbData.totalHasanat;
+          currentUser.totalGames   = fbData.totalGames;
+          window.currentUser = currentUser;
+          if (typeof updateHomeStats === 'function') updateHomeStats();
+        }
+      });
     }
   }, (code) => {
-    errEl.style.color='#FF9E9E';
-    if (code === 'auth/too-many-requests') errEl.textContent = '⏳ انتظر قليلاً وحاول تاني';
-    else if (code === 'auth/user-not-found' || code === 'auth/invalid-email') errEl.textContent = '❌ الإيميل ده مش مسجّل';
-    else errEl.textContent = '❌ مشكلة: ' + (code || 'غير معروف');
+    clearTimeout(_timeoutId);
+    // خطأ Firebase — ادخّل محلياً
+    _safeFinish(null);
   });
 }
 window.doForgotPassword = doForgotPassword;
@@ -9248,7 +9259,7 @@ function multiLeaveRoom() {
   window._multiRoomCache = null;
   multiState.roomCode = null;
   multiState.phase = 'lobby';
-  showMultiScreen();
+  // ★ المتصل هو اللي يقرر يروح فين (الرئيسية أو إعدادات الغرفة)
 }
 
 function _startPolling() {
