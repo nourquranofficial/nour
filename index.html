@@ -3565,15 +3565,25 @@ function _sendForgotEmail() {
   showToast('✅ تم حفظ الباسورد' + (_toastN ? ' — أهلاً ' + _toastN : '') + '!');
 
   // ★ خطوة ٣: اكتب bypassAuth في Firebase في الخلفية (مش بننتظر)
-  // ★ تأكد إن homeScreen ظاهرة صح على الموبايل
-  const _hs = document.getElementById('homeScreen');
-  if (_hs && !_hs.classList.contains('show')) {
+  // ★ Rebind أزرار الـ user-bar بعد تغيير الباسورد (حل مشكلة الموبايل)
+  setTimeout(() => {
+    const _logoutBtn = document.querySelector('button[onclick="doLogout()"]');
+    if (_logoutBtn) { _logoutBtn.onclick = null; _logoutBtn.addEventListener('click', doLogout, {passive:true}); }
+    const _userBar = document.querySelector('.user-bar');
+    if (_userBar) { _userBar.style.pointerEvents = 'auto'; _userBar.style.position = 'relative'; _userBar.style.zIndex = '10'; }
+    // أخفِ كل العناصر الثابتة اللي ممكن تحجب اللمس
+    ['forgotPassModal','confirmModal','resetPassModal'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.style.display = 'none'; el.style.pointerEvents = 'none'; el.style.visibility = 'hidden'; }
+    });
+    // أخفِ loginScreen بكل الطرق
+    const _ls = document.getElementById('loginScreen');
+    if (_ls) { _ls.classList.add('hide'); _ls.style.display = 'none'; _ls.style.pointerEvents = 'none'; }
+    // أظهر homeScreen صريح
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
-    _hs.classList.add('show');
-  }
-  // ★ تأكد إن loginScreen متخبّيه تماماً
-  const _ls = document.getElementById('loginScreen');
-  if (_ls) { _ls.classList.add('hide'); _ls.style.pointerEvents = 'none'; }
+    const _hs = document.getElementById('homeScreen');
+    if (_hs) { _hs.classList.add('show'); _hs.style.display = 'block'; }
+  }, 50);
 
   if (typeof window.fbForgotPasswordLogin === 'function') {
     window.fbForgotPasswordLogin(email, newPass, () => {}, () => {});
