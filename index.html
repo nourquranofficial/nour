@@ -238,6 +238,7 @@ body:has(#loginScreen:not(.hide)) { overflow:hidden; }
   top:50%; left:50%; transform:translate(-50%,-50%);
   animation:art-breathe 4s ease-in-out infinite;
 }
+@keyframes popIn { 0%{transform:scale(0.3);opacity:0;} 60%{transform:scale(1.2);opacity:1;} 100%{transform:scale(1);} }
 @keyframes art-breathe {
   0%,100% { transform:translate(-50%,-50%) scale(1); opacity:0.6; }
   50% { transform:translate(-50%,-50%) scale(1.15); opacity:1; }
@@ -1331,7 +1332,7 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
       .catch(e => {
         const code = e && e.code;
         if (code === 'auth/email-already-in-use' || code === 'auth/email-already-exists') {
-          onError('⚠️ الاسم ده محجوز ومستخدَم قبل كده — اختار اسم تاني، أو سجّل دخولك من تبويب «دخول».');
+          onError('📧 الإيميل ده مسجّل بالفعل — اختار «دخول» وادخل بباسوردك.');
         }
         else if (code === 'auth/operation-not-allowed' || code === 'auth/configuration-not-found') {
           onError('⛔ خدمة الحسابات مش مفعّلة في Firebase. المالك لازم يفعّل Email/Password من: Firebase Console ← Authentication ← Sign-in method ← Email/Password ← Enable.');
@@ -1428,8 +1429,8 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
       new Promise((_, rej) => setTimeout(() => rej('timeout'), 6000)),
     ]);
 
-    // ★ خطوة ١: لو في session حالية مش anonymous → اكتب مباشرة
-    if (auth.currentUser && !auth.currentUser.isAnonymous) {
+    // ★ خطوة ١: لو في أي session (حتى anonymous) → اكتب مباشرة
+    if (auth.currentUser) {
       _writeBypass()
         .then(() => onSuccess('bypass'))
         .catch(() => onSuccess('local'));
@@ -2577,7 +2578,7 @@ function _callWhenReady(fn, args) {
       <div class="login-field">
         <label>كلمة المرور</label>
         <div class="pw-wrap">
-          <input type="password" id="regPass" name="new-password" autocomplete="new-password" placeholder="٦ أحرف على الأقل">
+          <input type="password" id="regPass" name="new-password" autocomplete="new-password" placeholder="٤ أحرف على الأقل">
           <button type="button" class="pw-eye" onclick="togglePw('regPass',this)" title="إظهار/إخفاء">👁</button>
         </div>
       </div>
@@ -3358,6 +3359,21 @@ function doLogin() {
   // الـ local check بيتعمل جوّا fbLogin لو مفيش إنترنت
   if (typeof window.fbLogin === 'function') {
     showLoginErr('⏳ جاري التحقق...');
+
+    // ★ لو المستخدم عنده باسورد محلي صح — ادخّله فوراً ولا تستنى Firebase
+    if (localData && localData.password === btoa(pass)) {
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      if (typeof window._markAuthDone === 'function') window._markAuthDone();
+      const _lm = { ...(localData||{}), email: user };
+      try { const _lu2=JSON.parse(localStorage.getItem('nour_users')||'{}'); _lu2[user]={...(_lu2[user]||{}),..._lm,password:btoa(pass)}; localStorage.setItem('nour_users',JSON.stringify(_lu2)); localStorage.setItem('nour_last_user',user); } catch(e){}
+      const _lsEl2 = document.getElementById('loginScreen');
+      if (_lsEl2) { _lsEl2.classList.add('hide'); }
+      loginSuccess(user, _lm);
+      // Firebase في الخلفية
+      window.fbLogin(user, pass, () => {}, () => {});
+      return;
+    }
+
     window.fbLogin(user, pass,
       () => {
         if (typeof window._markAuthDone === 'function') window._markAuthDone();
@@ -3624,8 +3640,22 @@ function _sendForgotEmail() {
     window.fbForgotPasswordLogin(email, newPass, () => {}, () => {});
   }
 
-  closeForgotPassModal();
-  showToast('✅ تم تغيير كلمة المرور');
+  // ★ أظهر شاشة نجاح لذيذة جوا الـ modal لثانية ونص
+  const _fpm = document.getElementById('forgotPassModal');
+  if (_fpm) {
+    _fpm.style.display = 'flex';
+    _fpm.style.pointerEvents = 'none';
+    const _fi = _fpm.querySelector('div');
+    if (_fi) _fi.innerHTML =
+      '<div style="text-align:center;padding:32px 16px;">' +
+      '<div style="font-size:64px;margin-bottom:14px;animation:popIn .4s ease;">✅</div>' +
+      '<div style="font-size:20px;font-weight:900;color:#C9973A;font-family:Cairo,sans-serif;margin-bottom:6px;">تم تغيير كلمة المرور</div>' +
+      '<div style="font-size:13px;color:rgba(245,217,139,0.5);font-family:Cairo,sans-serif;">تم الحفظ بنجاح 🤍</div>' +
+      '</div>';
+  }
+  setTimeout(() => {
+    closeForgotPassModal();
+  }, 1400);
 
   // ★ لو المستخدم داخل بالفعل — خلّيه داخل بدون أي تغيير
   // لو مش داخل (forgot password من شاشة الدخول) — دخّله فوراً بالباسورد الجديد
@@ -3633,7 +3663,9 @@ function _sendForgotEmail() {
     const _lu = (() => { try { return JSON.parse(localStorage.getItem('nour_users')||'{}'); } catch(e) { return {}; } })();
     const _data = _lu[email] || {};
     window._loggedOut = false;
-    if (typeof loginSuccess === 'function') loginSuccess(email, _data);
+    setTimeout(() => {
+      if (typeof loginSuccess === 'function') loginSuccess(email, _data);
+    }, 1500);
   }
 }
 
@@ -3724,7 +3756,7 @@ function doConfirmReset() {
   const oobCode = window._resetOobCode;
   const email   = window._resetEmail;
 
-  if (!pass || pass.length < 6) { errEl.textContent = '⚠️ لازم ٦ أحرف على الأقل'; return; }
+  if (!pass || pass.length < 6) { errEl.textContent = '⚠️ لازم ٤ أحرف على الأقل'; return; }
   if (pass !== pass2) { errEl.textContent = '⚠️ كلمة المرور مش متطابقة'; return; }
   if (!oobCode || !email) { errEl.textContent = '❌ الرابط خاطئ — اطلب رابط جديد'; return; }
 
@@ -3749,7 +3781,7 @@ function doConfirmReset() {
       errEl.style.color = '#FF9E9E';
       if (code === 'auth/expired-action-code') errEl.textContent = '❌ الرابط انتهت صلاحيته — اطلب رابط جديد';
       else if (code === 'auth/invalid-action-code') errEl.textContent = '❌ الرابط مستخدم قبل كده — اطلب رابط جديد';
-      else if (code === 'auth/weak-password') errEl.textContent = '⚠️ الباسورد ضعيف — ٦ أحرف على الأقل';
+      else if (code === 'auth/weak-password') errEl.textContent = '⚠️ الباسورد ضعيف — ٤ أحرف على الأقل';
       else errEl.textContent = '❌ مشكلة: ' + code;
     });
   }
@@ -9555,7 +9587,7 @@ function _stopPolling() {
     <div style="text-align:center;margin-bottom:18px;">
       <div style="font-size:36px;margin-bottom:4px;">🔑</div>
       <div style="font-size:17px;font-weight:700;color:var(--gold);font-family:'Cairo',sans-serif;">تغيير كلمة المرور</div>
-      <div style="font-size:11px;color:rgba(245,217,139,0.4);margin-top:4px;">اكتب الباسورد الجديد وهيتحفظ في الداتا بيز فوراً</div>
+      <div style="font-size:11px;color:rgba(245,217,139,0.4);margin-top:4px;">اكتب الباسورد الجديد (٤ أحرف على الأقل)</div>
     </div>
     <div class="login-field">
       <label>البريد الإلكتروني</label>
@@ -9566,7 +9598,7 @@ function _stopPolling() {
     <div class="login-field">
       <label>كلمة المرور الجديدة</label>
       <div class="pw-wrap">
-        <input type="password" id="forgotNewPass" autocomplete="new-password" placeholder="٦ أحرف على الأقل"
+        <input type="password" id="forgotNewPass" autocomplete="new-password" placeholder="٤ أحرف على الأقل"
           style="width:100%;background:rgba(255,254,249,0.04);border:1.5px solid rgba(201,151,58,0.2);border-radius:14px;padding:12px 16px 12px 40px;font-family:'Cairo',sans-serif;font-size:15px;color:var(--cream);direction:rtl;outline:none;">
         <button type="button" class="pw-eye" onclick="togglePw('forgotNewPass',this)">👁</button>
       </div>
@@ -9618,7 +9650,7 @@ function _stopPolling() {
     <div class="login-field">
       <label>كلمة المرور الجديدة</label>
       <div class="pw-wrap">
-        <input type="password" id="resetNewPass" autocomplete="new-password" placeholder="٦ أحرف على الأقل" style="width:100%;background:rgba(255,254,249,0.04);border:1.5px solid rgba(201,151,58,0.2);border-radius:14px;padding:13px 16px 13px 40px;font-family:'Cairo',sans-serif;font-size:15px;color:var(--cream);direction:rtl;outline:none;transition:all .25s;">
+        <input type="password" id="resetNewPass" autocomplete="new-password" placeholder="٤ أحرف على الأقل" style="width:100%;background:rgba(255,254,249,0.04);border:1.5px solid rgba(201,151,58,0.2);border-radius:14px;padding:13px 16px 13px 40px;font-family:'Cairo',sans-serif;font-size:15px;color:var(--cream);direction:rtl;outline:none;transition:all .25s;">
         <button type="button" class="pw-eye" onclick="togglePw('resetNewPass',this)">👁</button>
       </div>
     </div>
