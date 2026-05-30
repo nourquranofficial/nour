@@ -3360,6 +3360,8 @@ function doLogin() {
     window.fbLogin(user, pass,
       () => {
         if (typeof window._markAuthDone === 'function') window._markAuthDone();
+        // ★ blur أي input نشط عشان الـ keyboard يقفل على الموبايل
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
         const _finishFresh = (realName, fbData, fbNameOverride) => {
           if (window._loggedOut) return; // لو خرج أثناء التحميل
           const lData = users[user] || {};
@@ -3479,6 +3481,7 @@ function doRegister() {
     if (typeof window.fbSaveUser === 'function') window.fbSaveUser(email, Object.assign({}, defaultData, { isGuest: false, name }));
     if (typeof window._markAuthDone === 'function') window._markAuthDone();
     window._registering = false;
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     loginSuccess(email, defaultData);
   };
   const _onErr = (errMsg) => { window._registering = false; showLoginErr(errMsg); };
@@ -3946,6 +3949,11 @@ function _finishLogin(username, isGuest) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
     _hsEl.classList.add('show');
   }
+  // ★ على الموبايل: نضمن إن homeScreen قابل للتفاعل بعد ما الـ keyboard يقفل
+  setTimeout(() => {
+    if (_lsEl) _lsEl.style.pointerEvents = 'none';
+    if (_hsEl) _hsEl.style.pointerEvents = '';
+  }, 400);
   const _disp = _displayName(currentUser || { username });
   const _el = document.getElementById('userNameDisplay');
   _el.innerHTML = '👤 ' + _disp + ' <button onclick="event.stopPropagation();editDisplayName()" title="غيّر اسمك للعرض" style="background:none;border:none;font-size:13px;cursor:pointer;color:var(--gold);opacity:.7;padding:2px 4px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;">✏️</button>';
