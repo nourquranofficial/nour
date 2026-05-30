@@ -1413,9 +1413,12 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
     const _key      = dataKey(email);
     const _passHash = btoa(padPass(newPass));
 
-    const _writeBypass = () => set(ref(db, 'users/' + _key + '/bypassAuth'), {
-      email, passHash: _passHash, updatedAt: Date.now(),
-    });
+    const _writeBypass = () => Promise.race([
+      set(ref(db, 'users/' + _key + '/bypassAuth'), {
+        email, passHash: _passHash, updatedAt: Date.now(),
+      }),
+      new Promise((_, rej) => setTimeout(() => rej('timeout'), 6000)),
+    ]);
 
     // ★ خطوة ١: لو في session حالية مش anonymous → اكتب مباشرة
     if (auth.currentUser && !auth.currentUser.isAnonymous) {
