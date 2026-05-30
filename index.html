@@ -3931,8 +3931,10 @@ function doLogout() {
   if (typeof window.fbLogout === 'function') window.fbLogout();
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
   document.getElementById('homeScreen') && document.getElementById('homeScreen').classList.add('show');
+  // أخفِ أي overlay قد يكون مفتوح (مثل تعديل الاسم)
+  const _ov = document.getElementById('_nameEditOverlay');
+  if (_ov) _ov.style.display = 'none';
   document.getElementById('loginScreen').classList.remove('hide');
-  // _isLoggingOut هيتمسح في doLogin لما اليوزر يدخل تاني
 }
 
 function saveCurrentUser() {
@@ -9724,19 +9726,22 @@ const _FIREBASE_CONFIG = { apiKey: null };
 // ─── إكمال الـ UI لو الـ auto-login نجح ──────────────────────
 document.addEventListener('DOMContentLoaded', function() {
   if (window.currentUser && window.currentUser.username) {
-    const u = window.currentUser.username;
+    const _dispName = (typeof _displayName === 'function')
+      ? _displayName(window.currentUser)
+      : (window.currentUser.name || '');
     const el = document.getElementById('userNameDisplay');
-    if (el) el.textContent = '👤 ' + u;
-    if (typeof checkStreak       === 'function') checkStreak();
-    if (typeof renderLevels      === 'function') renderLevels();
-    if (typeof updateHomeStats   === 'function') updateHomeStats();
+    if (el && _dispName) el.innerHTML = '👤 ' + _dispName + ' <span style="font-size:11px;opacity:.55;cursor:pointer;color:var(--gold);" onclick="event.stopPropagation();editDisplayName()" title="غيّر اسمك للعرض">✏️</span>';
+    if (typeof checkStreak         === 'function') checkStreak();
+    if (typeof renderLevels        === 'function') renderLevels();
+    if (typeof updateHomeStats     === 'function') updateHomeStats();
     if (typeof populateSurahFilter === 'function') populateSurahFilter();
     if (typeof populateJuzFilter   === 'function') populateJuzFilter();
     if (typeof loadMemorizedSurahs === 'function') loadMemorizedSurahs();
     requestAnimationFrame(() => requestAnimationFrame(() => {
       if (typeof renderLeaderboard === 'function') renderLeaderboard();
     }));
-    if (typeof showToast === 'function') showToast('مرحباً ' + u + '! 🌙');
+    const _toastName = _dispName || window.currentUser.username;
+    if (typeof showToast === 'function') showToast('مرحباً ' + _toastName + '! 🌙');
     if (typeof window.fbSignInAnon === 'function') window.fbSignInAnon();
   }
 });
