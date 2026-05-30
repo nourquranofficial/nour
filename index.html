@@ -3703,26 +3703,9 @@ function _sendForgotEmail() {
       '</div>';
   }
   setTimeout(() => {
-    closeForgotPassModal();
-    // ★ الموبايل: بعد إقفال الـ modal نعمل scroll للأعلى
-    // عشان الـ viewport يستقر والأزرار تكون في مكانها الصح
-    setTimeout(() => {
-      window.scrollTo(0, 0);
-      document.body.scrollTop = 0;
-      document.documentElement.scrollTop = 0;
-    }, 100);
+    // ★ reload — الوحيدة المضمونة على الموبايل (بدون modal artifacts أو keyboard bugs)
+    window.location.reload();
   }, 1400);
-
-  // ★ لو المستخدم داخل بالفعل — خلّيه داخل بدون أي تغيير
-  // لو مش داخل (forgot password من شاشة الدخول) — دخّله فوراً بالباسورد الجديد
-  if (!window.currentUser || !window.currentUser.username) {
-    const _lu = (() => { try { return JSON.parse(localStorage.getItem('nour_users')||'{}'); } catch(e) { return {}; } })();
-    const _data = _lu[email] || {};
-    window._loggedOut = false;
-    setTimeout(() => {
-      if (typeof loginSuccess === 'function') loginSuccess(email, _data);
-    }, 1500);
-  }
 }
 
 window.doForgotPassword = doForgotPassword;
