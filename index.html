@@ -3703,22 +3703,8 @@ function _sendForgotEmail() {
       '</div>';
   }
   setTimeout(() => {
-    // ★ إغلاق الـ modal بالكامل وإزالة أي أثر له
-    const _fpm2 = document.getElementById('forgotPassModal');
-    if (_fpm2) {
-      _fpm2.style.display = 'none';
-      _fpm2.style.visibility = 'hidden';
-      _fpm2.style.pointerEvents = 'none';
-      _fpm2.style.zIndex = '-1';
-    }
-    // إرجاع الـ forgotPassModal لحالته الأصلية
-    document.querySelectorAll('#forgotPassModal input').forEach(inp => inp.blur());
-    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-    window.scrollTo(0, 0);
-    // إعادة تهيئة الصفحة بدون reload
-    if (window.currentUser && window.currentUser.username && typeof _finishLogin === 'function') {
-      _finishLogin(window.currentUser.username, window.currentUser.isGuest || false);
-    }
+    // ★ reload — الوحيدة المضمونة على الموبايل (بدون modal artifacts أو keyboard bugs)
+    window.location.reload();
   }, 1400);
 }
 
@@ -4060,25 +4046,18 @@ function _finishLogin(username, isGuest) {
   if (!isGuest) {
     try { localStorage.setItem('nour_last_user', username); } catch(e) {}
   }
-  // ★ كشف وإزالة أي overlay بيحجب الـ user-bar
+  // ★ كشف أي element بيحجب الـ user-bar وإزالته
   setTimeout(() => {
     const _bar = document.querySelector('.user-bar');
     if (_bar) {
       const _rect = _bar.getBoundingClientRect();
       const _cx = _rect.left + _rect.width / 2;
       const _cy = _rect.top + 10;
-      // نجيب كل العناصر في منطقة الـ user-bar
-      const _blocking = document.elementsFromPoint(_cx, _cy).filter(function(el) {
-        return !_bar.contains(el) && el !== _bar && el !== document.body && el !== document.documentElement;
-      });
-      _blocking.forEach(function(bl) {
-        var cs = window.getComputedStyle(bl);
-        // لو مش display:none ومش visibility:hidden → محتمل يكون بيحجب
-        if (cs.display !== 'none' && cs.visibility !== 'hidden') {
-          bl.style.display = 'none';
-          bl.style.pointerEvents = 'none';
-        }
-      });
+      const _top = document.elementFromPoint(_cx, _cy);
+      if (_top && !_bar.contains(_top) && _top !== _bar) {
+        // في element بيحجب الـ user-bar
+        if (_top.style) { _top.style.display = 'none'; _top.style.pointerEvents = 'none'; }
+      }
     }
   }, 300);
 
@@ -7075,37 +7054,6 @@ function goHome() {
 }
 
 window.goHome = goHome;
-
-// ★ Global touchstart handler — يخترق أي overlay شفاف ويوصل للزرار الصح
-document.addEventListener('touchstart', function(e) {
-  var touch = e.touches[0];
-  if (!touch) return;
-  // نجيب كل العناصر في نقطة اللمس (بما فيها اللي تحت الـ overlay)
-  var els = document.elementsFromPoint(touch.clientX, touch.clientY);
-  for (var i = 0; i < els.length; i++) {
-    var el = els[i];
-    var fn = (el.getAttribute && el.getAttribute('onclick')) || '';
-    if (!fn) continue;
-    if (fn.indexOf('doLogout') !== -1) {
-      e.preventDefault();
-      e.stopPropagation();
-      doLogout();
-      return;
-    }
-    if (fn.indexOf('_saveNameEdit') !== -1) {
-      e.preventDefault();
-      e.stopPropagation();
-      if (typeof _saveNameEdit === 'function') _saveNameEdit();
-      return;
-    }
-    if (fn.indexOf('editDisplayName') !== -1) {
-      e.preventDefault();
-      e.stopPropagation();
-      if (typeof editDisplayName === 'function') editDisplayName();
-      return;
-    }
-  }
-}, {passive: false, capture: true});
 
 // ============================================================
 // ===== DAILY MISTAKES =====
