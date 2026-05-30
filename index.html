@@ -362,7 +362,7 @@ body:has(#loginScreen:not(.hide)) { overflow:hidden; }
   border-radius:14px; padding:10px 16px; margin-bottom:16px;
 }
 .user-name { font-size:14px; color:var(--gold); font-weight:600; }
-.user-logout { font-size:12px; color:rgba(245,217,139,0.45); cursor:pointer; }
+.user-logout { font-size:12px; color:rgba(245,217,139,0.45); cursor:pointer; padding:4px 8px; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
 .user-logout:hover { color:var(--red); }
 
 /* ===== STATS ===== */
@@ -1450,6 +1450,7 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
           .then(() => onSuccess('firebase'))
           .catch(() => {
             // ★ خطوة ٤: anonymous fallback (لو مفعّل)
+            if (window._cancelBgAuth) { onSuccess('local'); return; }
             signInAnonymously(auth)
               .then(() => _writeBypass())
               .then(() => onSuccess('bypass'))
@@ -2568,7 +2569,7 @@ function _callWhenReady(fn, args) {
         <span style="font-size:13px;color:var(--gold);" id="userLevelDisplay">المستوى ١</span>
         <span class="user-logout" onclick="resetScore()" style="color:rgba(255,120,100,0.5);" title="تصفير النقاط">🔄</span>
         <span class="user-logout" onclick="doDeleteAccount()" style="color:rgba(255,80,80,0.45);font-size:11px;" title="حذف الحساب نهائياً">🗑️</span>
-        <span class="user-logout" onclick="doLogout()">خروج ↩</span>
+        <button onclick="doLogout()" style="background:none;border:none;font-size:13px;color:rgba(245,217,139,0.55);cursor:pointer;font-family:'Cairo',sans-serif;padding:6px 10px;border-radius:8px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;">خروج ↩</button>
       </div>
     </div>
 
@@ -3298,6 +3299,7 @@ window.togglePw = togglePw;
 
 function doLogin() {
   window._loggedOut = false;
+  window._cancelBgAuth = false;
   const user = document.getElementById('loginUser').value.trim().toLowerCase();
   const pass = document.getElementById('loginPass').value;
   if (!user || !pass) { showLoginErr('أدخل الإيميل وكلمة المرور'); return; }
@@ -3333,7 +3335,8 @@ function doLogin() {
             localStorage.setItem('nour_users', JSON.stringify(_lu));
             localStorage.setItem('nour_last_user', user);
           } catch(e) {}
-          document.getElementById('loginScreen').classList.add('hide');
+          const _lsEl = document.getElementById('loginScreen');
+  if (_lsEl) { _lsEl.classList.add('hide'); _lsEl.style.pointerEvents = 'none'; }
           loginSuccess(realName || user, merged);
           if (typeof window.fbSaveUser === 'function' && merged.totalScore > 0) {
             window.fbSaveUser(user, Object.assign({}, merged, {isGuest: false}));
@@ -3511,12 +3514,18 @@ function doForgotPassword() {
   if (p1) p1.value = '';
   if (p2) p2.value = '';
   document.getElementById('forgotPassErr').textContent = '';
-  modal.style.display = 'flex';
+  modal.style.display      = 'flex';
+  modal.style.pointerEvents = 'auto';
+  modal.style.visibility    = 'visible';
   setTimeout(() => { if (p1) p1.focus(); }, 100);
 }
 function closeForgotPassModal() {
   const m = document.getElementById('forgotPassModal');
-  if (m) m.style.display = 'none';
+  if (m) {
+    m.style.display = 'none';
+    m.style.pointerEvents = 'none';
+    m.style.visibility   = 'hidden';
+  }
 }
 function _sendForgotEmail() {
   const email    = (document.getElementById('forgotEmailInput').value || '').trim().toLowerCase();
@@ -3542,7 +3551,8 @@ function _sendForgotEmail() {
 
   // ★ خطوة ٢: أغلق الـ modal وادخّل المستخدم فوراً
   closeForgotPassModal();
-  window._loggedOut = false; // تغيير الباسورد = دخول صريح
+  window._loggedOut = false;
+  window._cancelBgAuth = false;
   const _lData = (() => { try { return JSON.parse(localStorage.getItem('nour_users') || '{}')[email] || {}; } catch(e) { return {}; } })();
   if (typeof window._markAuthDone === 'function') window._markAuthDone();
   if (typeof window.loginSuccess === 'function') {
@@ -3551,9 +3561,20 @@ function _sendForgotEmail() {
       name: (typeof window._getStoredName === 'function' ? window._getStoredName(email) : null) || (_lData.name && !_lData.name.includes('@') ? _lData.name : '') || '',
     });
   }
-  showToast('✅ تم حفظ الباسورد!');
+  const _toastN = (typeof window._getStoredName === 'function' ? window._getStoredName(email) : null) || '';
+  showToast('✅ تم حفظ الباسورد' + (_toastN ? ' — أهلاً ' + _toastN : '') + '!');
 
   // ★ خطوة ٣: اكتب bypassAuth في Firebase في الخلفية (مش بننتظر)
+  // ★ تأكد إن homeScreen ظاهرة صح على الموبايل
+  const _hs = document.getElementById('homeScreen');
+  if (_hs && !_hs.classList.contains('show')) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
+    _hs.classList.add('show');
+  }
+  // ★ تأكد إن loginScreen متخبّيه تماماً
+  const _ls = document.getElementById('loginScreen');
+  if (_ls) { _ls.classList.add('hide'); _ls.style.pointerEvents = 'none'; }
+
   if (typeof window.fbForgotPasswordLogin === 'function') {
     window.fbForgotPasswordLogin(email, newPass, () => {}, () => {});
   }
@@ -3916,7 +3937,8 @@ function _finishLogin(username, isGuest) {
 }
 
 function doLogout() {
-  window._loggedOut = true; // ★ منع _continueAuthLogin بعد الخروج
+  window._loggedOut = true;
+  window._cancelBgAuth = true; // ★ أوقف أي background Firebase auth
   saveCurrentUser();
   window._pendingAutoLogin = null;
   try { clearTimeout(window._autoLoginFallbackTimer); } catch (e) {}
@@ -3934,7 +3956,8 @@ function doLogout() {
   // أخفِ أي overlay قد يكون مفتوح (مثل تعديل الاسم)
   const _ov = document.getElementById('_nameEditOverlay');
   if (_ov) _ov.style.display = 'none';
-  document.getElementById('loginScreen').classList.remove('hide');
+  const _lsOut = document.getElementById('loginScreen');
+  if (_lsOut) { _lsOut.classList.remove('hide'); _lsOut.style.pointerEvents = 'auto'; }
 }
 
 function saveCurrentUser() {
@@ -9740,8 +9763,7 @@ document.addEventListener('DOMContentLoaded', function() {
     requestAnimationFrame(() => requestAnimationFrame(() => {
       if (typeof renderLeaderboard === 'function') renderLeaderboard();
     }));
-    const _toastName = _dispName || window.currentUser.username;
-    if (typeof showToast === 'function') showToast('مرحباً ' + _toastName + '! 🌙');
+    if (typeof showToast === 'function' && _dispName) showToast('مرحباً ' + _dispName + '! 🌙');
     if (typeof window.fbSignInAnon === 'function') window.fbSignInAnon();
   }
 });
