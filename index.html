@@ -3202,30 +3202,25 @@ let currentUser = null;
     const data  = users[lastUser];
     if (!data) { localStorage.removeItem('nour_last_user'); return; }
 
-    // ★ الإصلاح: نخفي اللوجين مؤقتاً ونعمل Pre-fill، لكن لا ندخل المستخدم إلا بعد ما
-    // Firebase يأكد الـ token (onAuthStateChanged هيكمّل الدخول الحقيقي)
-    // فقط لو مفيش Firebase (offline) نكمّل من المحلي
-
-    // ضع علامة "في انتظار تأكيد Firebase" — onAuthStateChanged هيكمّل
     window._pendingAutoLogin = { username: lastUser, data };
 
-    // أخفي اللوجين وشيل الـ loading (المستخدم مش محتاج يشوف شاشة اللوجين)
+    // أخفي شاشة الدخول فوراً وأظهر الرئيسية
     const ls = document.getElementById('loginScreen');
-    if (ls) ls.classList.add('hide');
+    if (ls) { ls.classList.add('hide'); ls.style.display = 'none'; ls.style.pointerEvents = 'none'; }
+    const hs = document.getElementById('homeScreen');
+    if (hs) hs.classList.add('show');
 
-    // currentUser مبدئي — سيُؤكَّد أو يُلغى بعد Firebase
     currentUser = { username: lastUser, isGuest: false, ...(data || {}), _pendingVerify: true };
     window.currentUser = currentUser;
 
-    // Fallback: لو Firebase ما جاش خلال 5 ثواني (offline) → اعتمد على المحلي
+    // Fallback: لو Firebase ما جاش خلال ثانيتين → اعتمد على المحلي
     window._autoLoginFallbackTimer = setTimeout(() => {
       if (window.currentUser && window.currentUser._pendingVerify) {
-        // لا يزال في انتظار Firebase — قبلنا المحلي لأن المستخدم offline
         window.currentUser._pendingVerify = false;
         currentUser = window.currentUser;
         if (typeof loginSuccess === 'function') loginSuccess(lastUser, data);
       }
-    }, 5000);
+    }, 2000);
 
   } catch(e) {}
 })();
@@ -3552,35 +3547,28 @@ function _sendForgotEmail() {
 
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
 
-  // ★ احفظ البيانات للدخول عند الضغط على الزرار
-  window._pendingPassLogin = { email, passB64: btoa(newPass) };
   window._loggedOut = false;
   window._cancelBgAuth = false;
   if (typeof window.fbForgotPasswordLogin === 'function') {
     window.fbForgotPasswordLogin(email, newPass, () => {}, () => {});
   }
 
-  // ★ أظهر رسالة نجاح جوا الـ modal مع زرار دخول صريح
+  // أظهر رسالة نجاح مؤقتة ثم reload تلقائي
   const _modal = document.getElementById('forgotPassModal');
   if (_modal) {
     const _inner = _modal.querySelector('div');
     if (_inner) _inner.innerHTML =
-      '<div style="text-align:center;padding:20px 0;">' +
-      '<div style="font-size:52px;margin-bottom:16px;">✅</div>' +
-      '<div style="font-size:18px;font-weight:700;color:var(--gold);font-family:Cairo,sans-serif;margin-bottom:8px;">تم حفظ الباسورد!</div>' +
-      '<div style="font-size:13px;color:rgba(245,217,139,0.55);font-family:Cairo,sans-serif;margin-bottom:24px;">اضغط زرار الدخول للمتابعة</div>' +
-      '<button onclick="window._doPassLogin()" style="width:100%;padding:14px;background:linear-gradient(135deg,#C9973A,#E8C46A);border:none;border-radius:14px;font-family:Cairo,sans-serif;font-size:16px;font-weight:900;color:#1a1208;cursor:pointer;touch-action:manipulation;">دخول ✅</button>' +
+      '<div style="text-align:center;padding:30px 0;">' +
+      '<div style="font-size:52px;margin-bottom:12px;">✅</div>' +
+      '<div style="font-size:18px;font-weight:700;color:var(--gold);font-family:Cairo,sans-serif;">تم حفظ الباسورد!</div>' +
+      '<div style="font-size:13px;color:rgba(245,217,139,0.45);font-family:Cairo,sans-serif;margin-top:8px;">جاري الدخول...</div>' +
       '</div>';
   }
+
+  // reload بعد ثانية — يعطي الـ keyboard وقت يقفل ويكتب bypassAuth
+  setTimeout(() => { window.location.reload(); }, 1000);
 }
-// ★ دخول بعد تغيير الباسورد — reload للصفحة عشان نضمن state نظيف على الموبايل
-window._doPassLogin = function() {
-  const _p = window._pendingPassLogin || {};
-  const email = _p.email || '';
-  if (!email) return;
-  // البيانات محفوظة في localStorage — الـ reload هيدخّله تلقائي
-  window.location.reload();
-};
+
 window.doForgotPassword = doForgotPassword;
 window.closeForgotPassModal = closeForgotPassModal;
 window._sendForgotEmail = _sendForgotEmail;
