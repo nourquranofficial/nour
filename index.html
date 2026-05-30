@@ -1876,18 +1876,12 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
       _authDone = false;
       if (window._loggedOut) return; // ★ المستخدم خرج صريح — لا تعمل حاجة
 
-      // ★ لو Firebase قال "مفيش مستخدم" وفيه pending autoLogin — الغيه
-      if (window._pendingAutoLogin) {
-        window._pendingAutoLogin = null;
-        clearTimeout(window._autoLoginFallbackTimer);
-        if (window.currentUser && window.currentUser._pendingVerify) {
-          // الـ token انتهى أو المستخدم مش موجود — أرجع شاشة اللوجين
-          currentUser = null;
-          window.currentUser = null;
-          const ls = document.getElementById('loginScreen');
-          if (ls) ls.classList.remove('hide');
-          localStorage.removeItem('nour_last_user');
-        }
+      // ★ لو Firebase قال "مفيش مستخدم" — لا نلغي الـ pendingAutoLogin
+      // لأن المستخدم ممكن يكون مسجّل محلياً (bypass/local) والـ fallback timer هيدخّله
+      // بس لو كانت SESSION حقيقية وانتهت → أرجع للوجين
+      if (window._pendingAutoLogin && window.currentUser && window.currentUser._pendingVerify) {
+        // انتظر الـ fallback timer يشتغل — مش نقاطع اللوجين التلقائي
+        // (الـ timer موجود من attemptAutoLogin وهيشتغل بعد 2 ثانية)
       }
       return;
     }
