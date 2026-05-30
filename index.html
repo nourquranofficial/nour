@@ -3622,7 +3622,7 @@ function _sendForgotEmail() {
     doLogout();
     // بعد الـ logout، جهّز شاشة الدخول بالإيميل
     setTimeout(() => {
-      const _emailEl = document.getElementById('emailInput');
+      const _emailEl = document.getElementById('loginUser');
       if (_emailEl) { _emailEl.value = email; _emailEl.focus(); }
     }, 300);
   }, 600);
@@ -3971,7 +3971,22 @@ function _finishLogin(username, isGuest) {
   populateSurahFilter();
   populateJuzFilter();
   loadMemorizedSurahs();
-  showToast('مرحباً ' + _disp + '! 🌙');
+  showToast('مرحباً ' + (_disp||'') + '! 🌙');
+
+  // ★ safety net: لو الاسم مش ظهر صح، بعد ثانية نحاول تاني من كل المصادر
+  setTimeout(() => {
+    const _safeEl = document.getElementById('userNameDisplay');
+    if (!_safeEl || !window.currentUser) return;
+    const _cur = window.currentUser;
+    const _safeName = _cur.name ||
+      (typeof window._getStoredName === 'function' ? window._getStoredName(_cur.username) : null) ||
+      (() => { try { return JSON.parse(localStorage.getItem('nour_users')||'{}')[_cur.username]?.name; } catch(e){} return null; })();
+    if (_safeName && !_safeName.includes('@') && !_safeEl.textContent.includes(_safeName)) {
+      _cur.name = _safeName;
+      window.currentUser = _cur;
+      _safeEl.innerHTML = '👤 ' + _safeName + ' <button onclick="event.stopPropagation();editDisplayName()" title="غيّر اسمك للعرض" style="background:none;border:none;font-size:13px;cursor:pointer;color:var(--gold);opacity:.7;padding:2px 4px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;">✏️</button>';
+    }
+  }, 1000);
 
 
   // ★ sync كامل من Firebase عند الدخول (مسجلين فقط)
