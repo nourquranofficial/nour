@@ -1810,6 +1810,8 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
   window._markAuthDone  = () => { _authDone = true;  };
 
   onAuthStateChanged(auth, (user) => {
+    // ★ لو اليوزر طلب logout صريح — منعملش أي دخول تلقائي
+    if (window._isLoggingOut) return;
     if (!user) {
       _authDone = false;
       // ★ لو Firebase قال "مفيش مستخدم" وفيه pending autoLogin — الغيه
@@ -3503,9 +3505,13 @@ function _sendForgotEmail() {
     };
 
     if (type === 'firebase') {
-      // دخل بـ Firebase Auth الفعلي — onAuthStateChanged هيكمّل
+      // دخل بـ Firebase Auth — جيب البيانات وادخّل
       closeForgotPassModal();
-      showToast('✅ تم تغيير الباسورد — دخلت!');
+      if (typeof window.fbGetUserData === 'function') {
+        window.fbGetUserData(email, (data) => _finishLogin(data));
+      } else {
+        showToast('✅ تم تغيير الباسورد — دخلت!');
+      }
     } else {
       if (typeof window.fbGetUserData === 'function') {
         window.fbGetUserData(email, (data) => _finishLogin(data));
@@ -3846,6 +3852,7 @@ function _finishLogin(username, isGuest) {
 }
 
 function doLogout() {
+  window._isLoggingOut = true; // ★ منع onAuthStateChanged من إعادة الدخول
   saveCurrentUser();
   window._pendingAutoLogin = null;
   try { clearTimeout(window._autoLoginFallbackTimer); } catch (e) {}
@@ -3861,6 +3868,8 @@ function doLogout() {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
   document.getElementById('homeScreen') && document.getElementById('homeScreen').classList.add('show');
   document.getElementById('loginScreen').classList.remove('hide');
+  // امسح الـ flag بعد ما شاشة الدخول اتظهرت
+  setTimeout(() => { window._isLoggingOut = false; }, 1000);
 }
 
 function saveCurrentUser() {
@@ -5441,10 +5450,9 @@ function _showRandomSlider() {
   const resetBtn = document.getElementById('resetDualBtn');
   if (resetBtn) resetBtn.textContent = '↺ إعادة الضبط';
   _dsMin = 5; _dsMax = 50;
-  _dsFrom = Math.max(_dsMin, Math.min(_dsFrom, _dsMax));
-  _dsTo   = Math.max(_dsFrom, Math.min(_dsTo, _dsMax));
-  if (_dsFrom < _dsMin) _dsFrom = _dsMin;
-  if (_dsTo   < _dsFrom) _dsTo = 50;
+  // ★ رست الـ slider للـ default — مش نسيب القيمة القديمة للسورة/الجزء
+  _dsFrom = _dsMin;
+  _dsTo   = _defaultQCount || 50;
   const ticksEl = document.getElementById('dualTicks');
   if (ticksEl) ticksEl.innerHTML = '<span>٥</span><span>١٠</span><span>٢٠</span><span>٣٠</span><span>٤٠</span><span>٥٠</span>';
   _dsRender();
