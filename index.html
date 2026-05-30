@@ -131,6 +131,14 @@
 ]
 </script>
 
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#C9973A">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="نور">
+<meta property="og:title" content="نور - تحدي حفظ القرآن الكريم">
+<meta property="og:description" content="اختبر حفظك للقرآن الكريم بصوت الشيخ مشاري بن راشد العفاسي">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
@@ -2598,7 +2606,8 @@ function _callWhenReady(fn, args) {
       <div class="logo-title">نـور</div>
       <div class="logo-sub">تحدي حفظ القرآن الكريم</div>
       <div style="display:inline-block;margin-top:6px;padding:3px 12px;background:rgba(201,151,58,0.12);border:1px solid rgba(201,151,58,0.35);border-radius:20px;font-size:10px;color:rgba(245,217,139,0.7);letter-spacing:0.5px;">★ الموقع الرسمي الوحيد ★</div>
-      <div style="margin-top:6px;font-size:10px;color:rgba(245,217,139,0.4);">(حقوق الصوت محمية للشيخ مشاري بن راشد العفاسي)</div>
+      <div style="margin-top:6px;font-size:10px;color:rgba(245,217,139,0.4);">الصوت: الشيخ مشاري بن راشد العفاسي — جميع الحقوق محفوظة</div>
+      <div style="margin-top:4px;font-size:10px;"><a href="privacy-policy.html" target="_blank" style="color:rgba(201,151,58,0.4);text-decoration:none;">سياسة الخصوصية</a></div>
     </div>
 
     <!-- USER BAR -->
@@ -3453,15 +3462,21 @@ function doRegister() {
   // نجاح التسجيل في Firebase
   const _onReg = () => {
     const defaultData = createDefaultUserData();
-    defaultData.name     = name;  // الاسم للعرض
-    defaultData.email    = email; // نحفظ الإيميل للرجوع إليه
-    defaultData.username = email; // الإيميل هو المعرّف
-    if (typeof window.fbSaveFullUserData === 'function') {
-      window.fbSaveFullUserData(email, defaultData);
-    }
-    if (typeof window.fbSaveUser === 'function') {
-      window.fbSaveUser(email, Object.assign({}, defaultData, { isGuest: false, name: name }));
-    }
+    defaultData.name     = name;
+    defaultData.email    = email;
+    defaultData.username = email;
+    // ★ حفظ الاسم في localStorage
+    try {
+      localStorage.setItem('nour_name_' + email, name);
+      const _lu = JSON.parse(localStorage.getItem('nour_users') || '{}');
+      if (!_lu[email]) _lu[email] = {};
+      _lu[email].name = name; _lu[email].email = email;
+      localStorage.setItem('nour_users', JSON.stringify(_lu));
+      localStorage.setItem('nour_last_user', email);
+    } catch(e) {}
+    // ★ حفظ في Firebase
+    if (typeof window.fbSaveName === 'function') window.fbSaveName(email, name);
+    if (typeof window.fbSaveUser === 'function') window.fbSaveUser(email, Object.assign({}, defaultData, { isGuest: false, name }));
     if (typeof window._markAuthDone === 'function') window._markAuthDone();
     window._registering = false;
     loginSuccess(email, defaultData);
@@ -3923,7 +3938,14 @@ window.doDeleteAccount = doDeleteAccount;
 
 
 function _finishLogin(username, isGuest) {
-  document.getElementById('loginScreen').classList.add('hide');
+  // ★ إخفاء loginScreen وإظهار homeScreen بشكل صريح
+  const _lsEl = document.getElementById('loginScreen');
+  if (_lsEl) { _lsEl.classList.add('hide'); _lsEl.style.pointerEvents = 'none'; }
+  const _hsEl = document.getElementById('homeScreen');
+  if (_hsEl) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
+    _hsEl.classList.add('show');
+  }
   const _disp = _displayName(currentUser || { username });
   const _el = document.getElementById('userNameDisplay');
   _el.innerHTML = '👤 ' + _disp + ' <button onclick="event.stopPropagation();editDisplayName()" title="غيّر اسمك للعرض" style="background:none;border:none;font-size:13px;cursor:pointer;color:var(--gold);opacity:.7;padding:2px 4px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;">✏️</button>';
@@ -3994,7 +4016,7 @@ function doLogout() {
   const _ov = document.getElementById('_nameEditOverlay');
   if (_ov) _ov.style.display = 'none';
   const _lsOut = document.getElementById('loginScreen');
-  if (_lsOut) { _lsOut.classList.remove('hide'); _lsOut.style.display = ''; _lsOut.style.pointerEvents = ''; _lsOut.style.visibility = ''; }
+  if (_lsOut) { _lsOut.classList.remove('hide'); _lsOut.style.pointerEvents = ''; }
 }
 
 function saveCurrentUser() {
