@@ -3689,35 +3689,15 @@ function _sendForgotEmail() {
     window.fbForgotPasswordLogin(email, newPass, () => {}, () => {});
   }
 
-  // ★ أظهر animation نجاح — كل العناصر بـ pointer-events:none
+  // ★ أغلق الـ modal فوراً وأظهر toast بدون أي animation تعبث بالـ touch layer
   const _fpm = document.getElementById('forgotPassModal');
   if (_fpm) {
-    _fpm.style.display = 'flex';
+    _fpm.style.display = 'none';
     _fpm.style.pointerEvents = 'none';
-    const _fi = _fpm.querySelector('div');
-    if (_fi) {
-      _fi.style.pointerEvents = 'none'; // ★ الحل الجوهري
-      _fi.innerHTML =
-        '<div style="text-align:center;padding:32px 16px;pointer-events:none;">' +
-        '<div style="font-size:64px;margin-bottom:14px;animation:popIn .4s ease;pointer-events:none;">✅</div>' +
-        '<div style="font-size:20px;font-weight:900;color:#C9973A;font-family:Cairo,sans-serif;margin-bottom:6px;pointer-events:none;">تم تغيير كلمة المرور</div>' +
-        '<div style="font-size:13px;color:rgba(245,217,139,0.5);font-family:Cairo,sans-serif;pointer-events:none;">تم الحفظ بنجاح 🤍</div>' +
-        '</div>';
-    }
+    _fpm.style.visibility = 'hidden';
   }
-  setTimeout(() => {
-    // أغلق الـ modal بس — المستخدم فاضل على نفس الصفحة بدون أي تغيير
-    const _fpm2 = document.getElementById('forgotPassModal');
-    if (_fpm2) {
-      _fpm2.style.display = 'none';
-      _fpm2.style.pointerEvents = 'none';
-      _fpm2.style.visibility = 'hidden';
-      const _fi2 = _fpm2.querySelector('div');
-      if (_fi2) _fi2.style.pointerEvents = 'none';
-    }
-    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-    window.scrollTo(0, 0);
-  }, 1400);
+  if (typeof showToast === 'function') showToast('✅ تم تغيير كلمة المرور بنجاح');
+  window.scrollTo(0, 0);
 }
 
 window.doForgotPassword = doForgotPassword;
