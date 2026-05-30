@@ -3562,10 +3562,16 @@ window.doFacebookSignIn = doFacebookSignIn;
 function doForgotPassword() {
   const modal = document.getElementById('forgotPassModal');
   if (!modal) return;
-  // حط الإيميل من حقل الدخول لو في
-  const loginEmail = document.getElementById('loginUser');
+  // ★ نملي الإيميل: من currentUser أولاً، ثم من حقل الدخول
   const inp = document.getElementById('forgotEmailInput');
-  if (inp && loginEmail && loginEmail.value) inp.value = loginEmail.value.trim().toLowerCase();
+  if (inp) {
+    const _cu = window.currentUser;
+    const _loginEmail = document.getElementById('loginUser');
+    const _email = (_cu && _cu.username && _cu.username.includes('@') ? _cu.username : null)
+      || (_loginEmail && _loginEmail.value ? _loginEmail.value.trim().toLowerCase() : null)
+      || '';
+    inp.value = _email;
+  }
   // صفّر الحقول
   const p1 = document.getElementById('forgotNewPass');
   const p2 = document.getElementById('forgotConfirmPass');
@@ -3591,8 +3597,11 @@ function _sendForgotEmail() {
   const confPass = (document.getElementById('forgotConfirmPass').value || '').trim();
   const errEl    = document.getElementById('forgotPassErr');
 
-  if (!email || !email.includes('@')) { errEl.textContent = '⚠️ اكتب إيميلك الصح'; errEl.style.color='#FF9E9E'; return; }
-  if (!newPass || newPass.length < 6) { errEl.textContent = '⚠️ الباسورد لازم ٦ أحرف على الأقل'; errEl.style.color='#FF9E9E'; return; }
+  // ★ لو الإيميل فاضي خذه من currentUser
+  const _finalEmail = email || (window.currentUser && window.currentUser.username) || '';
+  if (!_finalEmail || !_finalEmail.includes('@')) { errEl.textContent = '⚠️ اكتب إيميلك الصح'; errEl.style.color='#FF9E9E'; return; }
+  if (_finalEmail !== email) { email = _finalEmail; }
+  if (!newPass || newPass.length < 4) { errEl.textContent = '⚠️ الباسورد لازم ٤ أحرف على الأقل'; errEl.style.color='#FF9E9E'; return; }
   if (newPass !== confPass) { errEl.textContent = '⚠️ الباسورد مش متطابق'; errEl.style.color='#FF9E9E'; return; }
 
   // ★ خطوة ١: احفظ محلياً فوراً
@@ -3614,31 +3623,9 @@ function _sendForgotEmail() {
     window.fbForgotPasswordLogin(email, newPass, () => {}, () => {});
   }
 
-  // ★ أغلق الـ modal وخلاص - المستخدم لسا داخل
+  // ★ أغلق الـ modal - المستخدم لسا داخل ومحتاجش logout أو reload
   closeForgotPassModal();
-  showToast('✅ تم تغيير كلمة المرور');
-  return;
-
-  // ★ أظهر success screen واضح ثم reload
-  const _fpm = document.getElementById('forgotPassModal');
-  if (_fpm) {
-    _fpm.style.display = 'flex';
-    _fpm.style.pointerEvents = 'auto';
-    _fpm.style.visibility = 'visible';
-    const _fi = _fpm.querySelector('div');
-    if (_fi) _fi.innerHTML =
-      '<div style="text-align:center;padding:28px 16px;">' +
-      '<div style="font-size:56px;margin-bottom:14px;">✅</div>' +
-      '<div style="font-size:20px;font-weight:900;color:#C9973A;font-family:Cairo,sans-serif;margin-bottom:8px;">تم تغيير كلمة المرور</div>' +
-      '<div style="font-size:14px;color:rgba(245,217,139,0.6);font-family:Cairo,sans-serif;margin-bottom:24px;">جاري الدخول تلقائياً...</div>' +
-      '<div style="width:100%;height:4px;background:rgba(201,151,58,0.2);border-radius:4px;overflow:hidden;">' +
-      '<div id="_passChangeBar" style="height:100%;width:0%;background:#C9973A;border-radius:4px;transition:width 1.2s linear;"></div>' +
-      '</div></div>';
-    setTimeout(() => { const b = document.getElementById('_passChangeBar'); if(b) b.style.width='100%'; }, 50);
-  }
-
-  // reload بعد ١.٣ ثانية — البيانات محفوظة في localStorage
-  setTimeout(() => { window.location.reload(); }, 1300);
+  showToast('✅ تم تغيير كلمة المرور بنجاح');
 }
 
 window.doForgotPassword = doForgotPassword;
