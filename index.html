@@ -1842,6 +1842,7 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
     // ★ لو اليوزر طلب logout صريح — منعملش أي دخول تلقائي
     if (!user) {
       _authDone = false;
+      if (window._loggedOut) return; // ★ المستخدم خرج صريح — لا تعمل حاجة
 
       // ★ لو Firebase قال "مفيش مستخدم" وفيه pending autoLogin — الغيه
       if (window._pendingAutoLogin) {
@@ -3251,15 +3252,9 @@ function createDefaultUserData() {
 //   لو مفيش name مخصّص (حسابات قديمة أو ضيوف) يرجع username.
 function _displayName(u) {
   if (!u) return '';
-  if (typeof u === 'string') {
-    // لو الـ string ده إيميل — رجّع الجزء قبل @
-    return u.includes('@') ? u.split('@')[0] : u;
-  }
-  // name > جزء الإيميل قبل @ > مستخدم
+  if (typeof u === 'string') return u.includes('@') ? '' : u;
   if (u.name && u.name.trim() && !u.name.includes('@')) return u.name.trim();
-  const _raw = u.username || u.email || '';
-  if (_raw.includes('@')) return _raw.split('@')[0];
-  return _raw || '';
+  return ''; // لا اسم حقيقي → فاضي مش إيميل
 }
 window._displayName = _displayName;
 
@@ -3815,6 +3810,7 @@ function _saveNameEdit() {
 
   const el = document.getElementById('userNameDisplay');
   if (el) el.innerHTML = '👤 ' + n + ' <span style="font-size:11px;opacity:.55;cursor:pointer;color:var(--gold);" onclick="event.stopPropagation();editDisplayName()" title="غيّر اسمك للعرض">✏️</span>';
+  _cancelNameEdit(); // أغلق الـ popup بعد الحفظ
   showToast('✅ تم تغيير الاسم: ' + n);
   if (typeof renderLeaderboard === 'function') renderLeaderboard();
 }
