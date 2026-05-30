@@ -1548,14 +1548,20 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
     update(ref(db, 'users/' + key + '/data'), { ...cleanData, updatedAt: Date.now() }).catch(() => {});
   };
 
-  // ★ مسار مستقل للاسم — مع anonymous fallback لضمان الكتابة
+  // ★ حفظ الاسم في Firebase — مكانين للضمان
   window.fbSaveName = function(username, name) {
     if (!username || !name) return;
     const key = dataKey(username);
-    const _doWrite = () => set(ref(db, 'users/' + key + '/name'), name).catch(() => {});
-    if (auth.currentUser) return _doWrite();
-    // مفيش session — جرّب anonymous
-    return signInAnonymously(auth).then(_doWrite).catch(_doWrite);
+    const _doWrite = () => Promise.all([
+      set(ref(db, 'users/' + key + '/name'), name).catch(() => {}),
+      update(ref(db, 'users/' + key + '/data'), { name, updatedAt: Date.now() }).catch(() => {}),
+    ]);
+    if (auth.currentUser) { _doWrite(); return; }
+    // مفيش session — جرّب anonymous ثم اكتب
+    signInAnonymously(auth).then(_doWrite).catch(() => {
+      // آخر محاولة بدون auth (لو قواعد Firebase سمحت)
+      _doWrite().catch(() => {});
+    });
   };
   window.fbGetName = function(username, cb) {
     if (!username) { cb(null); return; }
@@ -3820,7 +3826,7 @@ function _saveNameEdit() {
   }
 
   const el = document.getElementById('userNameDisplay');
-  if (el) el.innerHTML = '👤 ' + n + ' <span style="font-size:11px;opacity:.55;cursor:pointer;color:var(--gold);" onclick="event.stopPropagation();editDisplayName()" title="غيّر اسمك للعرض">✏️</span>';
+  if (el) el.innerHTML = '👤 ' + n + ' <button onclick="event.stopPropagation();editDisplayName()" title="غيّر اسمك للعرض" style="background:none;border:none;font-size:13px;cursor:pointer;color:var(--gold);opacity:.7;padding:2px 4px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;">✏️</button>';
   _cancelNameEdit(); // أغلق الـ popup بعد الحفظ
   showToast('✅ تم تغيير الاسم: ' + n);
   if (typeof renderLeaderboard === 'function') renderLeaderboard();
