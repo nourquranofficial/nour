@@ -3776,29 +3776,27 @@ function guestLogin() {
 function loginSuccess(username, data, isGuest=false) {
   // لو في auto-login حصل بالفعل لنفس المستخدم — اجمع البيانات (خذ الأعلى)
   if (window.currentUser && window.currentUser.username === username) {
+    const cu = window.currentUser;
     if (data) {
-      const cu = window.currentUser;
       cu.totalScore   = Math.max(cu.totalScore   || 0, data.totalScore   || 0);
       cu.totalGames   = Math.max(cu.totalGames   || 0, data.totalGames   || 0);
       cu.totalHasanat = Math.max(cu.totalHasanat || 0, data.totalHasanat || 0);
       cu.streak       = Math.max(cu.streak       || 0, data.streak       || 0);
       if (data.lastPlay) cu.lastPlay = data.lastPlay;
       if (data.password) cu.password = data.password;
-      currentUser = cu;
-      window.currentUser = cu;
-      // لو فيه نقاط جديدة جاية من Firebase — ارفعها محلياً
+      // ★ الاسم: خذ الاسم الجديد لو أحسن من الموجود
+      if (data.name && !data.name.includes('@') && data.name.trim()) cu.name = data.name.trim();
       const _lu = getUsers();
       if (_lu[username]) {
         _lu[username].totalScore   = cu.totalScore;
         _lu[username].totalGames   = cu.totalGames;
         _lu[username].totalHasanat = cu.totalHasanat;
         _lu[username].streak       = cu.streak;
+        if (cu.name) _lu[username].name = cu.name;
         saveUsers(_lu);
       }
-      updateHomeStats();
     }
-    // ★ دايماً نحدّث الـ display حتى لو loginScreen مخبّي (من attemptAutoLogin)
-    currentUser = cu; // update with latest data
+    currentUser = cu;
     window.currentUser = cu;
     _finishLogin(username, isGuest);
     return;
