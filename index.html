@@ -3782,20 +3782,35 @@ window.showGame = showGame;
 function editDisplayName() {
   if (!currentUser) return;
   if (currentUser.isGuest) { showToast('🕊️ الضيوف ما يقدروش يغيّروا الاسم — سجّل حساب أولاً'); return; }
-  const cur = currentUser.name || currentUser.username || '';
-  const el = document.getElementById('userNameDisplay');
-  if (!el) return;
-  // ★ inline input بدل prompt — بيشتغل على كل الأجهزة
-  const _safeN = cur.replace(/"/g,'&quot;');
-  el.innerHTML = '<span style="display:flex;align-items:center;gap:4px;flex-wrap:nowrap;">'
-    + '<input id="_nameEditInput" type="text" value="' + _safeN + '" maxlength="30"'
-    + ' style="background:rgba(201,151,58,0.12);border:1.5px solid rgba(201,151,58,0.5);border-radius:8px;padding:4px 8px;font-family:Cairo,sans-serif;font-size:13px;color:var(--gold);direction:rtl;outline:none;width:140px;"'
-    + '>'  // onkeydown via addEventListener
-    + '<button onclick="_saveNameEdit()" style="background:rgba(46,175,120,0.2);border:1px solid rgba(46,175,120,0.4);border-radius:6px;padding:3px 7px;color:#7DFFC9;font-size:12px;cursor:pointer;flex-shrink:0;">✓</button>'
-    + '<button onclick="_cancelNameEdit()" style="background:rgba(255,100,100,0.1);border:1px solid rgba(255,100,100,0.3);border-radius:6px;padding:3px 7px;color:#FF9E9E;font-size:12px;cursor:pointer;flex-shrink:0;">✕</button>'
-    + '</span>';
+  const cur = currentUser.name || '';
+
+  // ★ popup بسيط بدل inline عشان ما يبوظش شكل الـ user-bar على الموبايل
+  let overlay = document.getElementById('_nameEditOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = '_nameEditOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.innerHTML =
+      '<div style="background:linear-gradient(160deg,#1e1508,#12100a);border:1px solid rgba(201,151,58,0.4);border-radius:18px;padding:24px 20px;width:100%;max-width:320px;text-align:center;">' +
+        '<div style="font-size:14px;color:var(--gold);font-family:Cairo,sans-serif;font-weight:700;margin-bottom:14px;">✏️ تعديل الاسم</div>' +
+        '<input id="_nameEditInput" type="text" maxlength="30" placeholder="اكتب اسمك هنا"' +
+        ' style="width:100%;background:rgba(201,151,58,0.1);border:1.5px solid rgba(201,151,58,0.4);border-radius:12px;padding:10px 14px;font-family:Cairo,sans-serif;font-size:15px;color:var(--gold);direction:rtl;outline:none;text-align:right;box-sizing:border-box;">' +
+        '<div style="display:flex;gap:8px;margin-top:12px;">' +
+          '<button onclick="_cancelNameEdit()" style="flex:1;padding:10px;background:rgba(255,254,249,0.05);border:1px solid rgba(201,151,58,0.2);border-radius:10px;color:rgba(245,217,139,0.5);font-family:Cairo,sans-serif;font-size:14px;cursor:pointer;">إلغاء</button>' +
+          '<button onclick="_saveNameEdit()" style="flex:2;padding:10px;background:linear-gradient(135deg,#C9973A,#E8C46A);border:none;border-radius:10px;font-family:Cairo,sans-serif;font-size:14px;font-weight:900;color:#1a1208;cursor:pointer;">حفظ ✓</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+  }
+  overlay.style.display = 'flex';
   const inp = document.getElementById('_nameEditInput');
-  if (inp) { inp.focus(); inp.select(); inp.addEventListener('keydown', function(ev){ if(ev.key==="Enter") _saveNameEdit(); if(ev.key==="Escape") _cancelNameEdit(); }); }
+  if (inp) {
+    inp.value = cur;
+    setTimeout(() => { inp.focus(); inp.select(); }, 100);
+    inp.onkeydown = (ev) => { if (ev.key === 'Enter') _saveNameEdit(); if (ev.key === 'Escape') _cancelNameEdit(); };
+  }
+  // إغلاق بالضغط على الخلفية
+  overlay.onclick = (e) => { if (e.target === overlay) _cancelNameEdit(); };
 }
 function _saveNameEdit() {
   const inp = document.getElementById('_nameEditInput');
@@ -3838,9 +3853,8 @@ function _saveNameEdit() {
   if (typeof renderLeaderboard === 'function') renderLeaderboard();
 }
 function _cancelNameEdit() {
-  const n = currentUser.name || currentUser.username || '';
-  const el = document.getElementById('userNameDisplay');
-  if (el) el.innerHTML = '👤 ' + n + ' <span style="font-size:11px;opacity:.55;cursor:pointer;color:var(--gold);" onclick="event.stopPropagation();editDisplayName()" title="غيّر اسمك للعرض">✏️</span>';
+  const overlay = document.getElementById('_nameEditOverlay');
+  if (overlay) overlay.style.display = 'none';
 }
 window.editDisplayName = editDisplayName;
 window._saveNameEdit = _saveNameEdit;
