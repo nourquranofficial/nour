@@ -4046,6 +4046,21 @@ function _finishLogin(username, isGuest) {
   if (!isGuest) {
     try { localStorage.setItem('nour_last_user', username); } catch(e) {}
   }
+  // ★ كشف أي element بيحجب الـ user-bar وإزالته
+  setTimeout(() => {
+    const _bar = document.querySelector('.user-bar');
+    if (_bar) {
+      const _rect = _bar.getBoundingClientRect();
+      const _cx = _rect.left + _rect.width / 2;
+      const _cy = _rect.top + 10;
+      const _top = document.elementFromPoint(_cx, _cy);
+      if (_top && !_bar.contains(_top) && _top !== _bar) {
+        // في element بيحجب الـ user-bar
+        if (_top.style) { _top.style.display = 'none'; _top.style.pointerEvents = 'none'; }
+      }
+    }
+  }, 300);
+
   // ★ الموبايل: نضيف touchend listeners مباشرة على الأزرار عشان نتجاوز مشاكل onclick
   setTimeout(() => {
     // زرار الخروج
@@ -4120,17 +4135,25 @@ function _finishLogin(username, isGuest) {
 function doLogout() {
   window._isLoggingOut = true;
   window._loggedOut = true;
+  window._cancelBgAuth = true;
   if (typeof window.fbUnwatchName === 'function') window.fbUnwatchName();
-  saveCurrentUser();
-  try { clearTimeout(window._autoLoginFallbackTimer); } catch (e) {}
   if (typeof window.fbUnwatchMistakes === 'function') window.fbUnwatchMistakes();
   if (typeof window.fbUnwatchUserData === 'function') window.fbUnwatchUserData();
+  saveCurrentUser();
+  try { clearTimeout(window._autoLoginFallbackTimer); } catch(e) {}
   currentUser = null;
   window.currentUser = null;
+  window._pendingAutoLogin = null;
+  window._lbAllList = null;
   try { localStorage.removeItem('nour_last_user'); } catch(e) {}
   if (typeof window.fbLogout === 'function') window.fbLogout();
-  // ★ reload مباشر بدون setTimeout - iOS بيمنع navigation من داخل setTimeout
-  window.location.href = window.location.href;
+  // ★ أظهر loginScreen مباشرة بدون reload
+  const _lsOut = document.getElementById('loginScreen');
+  if (_lsOut) {
+    _lsOut.style.cssText = '';
+    _lsOut.classList.remove('hide');
+  }
+  setTimeout(() => { window._isLoggingOut = false; }, 1500);
 }
 
 function saveCurrentUser() {
