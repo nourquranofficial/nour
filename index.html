@@ -3557,15 +3557,14 @@ function _sendForgotEmail() {
 
   // ★ خطوة ٢: أغلق الـ modal وادخّل المستخدم فوراً
   closeForgotPassModal();
-  if (!window._loggedOut) {
-    const _lData = (() => { try { return JSON.parse(localStorage.getItem('nour_users') || '{}')[email] || {}; } catch(e) { return {}; } })();
-    if (typeof window._markAuthDone === 'function') window._markAuthDone();
-    if (typeof window.loginSuccess === 'function') {
-      window.loginSuccess(email, {
-        ..._lData, email, isGuest: false, password: btoa(newPass),
-        name: (typeof window._getStoredName === 'function' ? window._getStoredName(email) : null) || _lData.name || '',
-      });
-    }
+  window._loggedOut = false; // تغيير الباسورد = دخول صريح
+  const _lData = (() => { try { return JSON.parse(localStorage.getItem('nour_users') || '{}')[email] || {}; } catch(e) { return {}; } })();
+  if (typeof window._markAuthDone === 'function') window._markAuthDone();
+  if (typeof window.loginSuccess === 'function') {
+    window.loginSuccess(email, {
+      ..._lData, email, isGuest: false, password: btoa(newPass),
+      name: (typeof window._getStoredName === 'function' ? window._getStoredName(email) : null) || _lData.name || '',
+    });
   }
   showToast('✅ تم حفظ الباسورد!');
 
